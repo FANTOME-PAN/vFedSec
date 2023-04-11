@@ -26,7 +26,6 @@ Please implement functions
 - `generate_active_party_local_module`
 - `generate_global_module`
 - `get_criterion`
-- 
 
 The FL solution will use the above functions to create NN models and compute the loss.
 
