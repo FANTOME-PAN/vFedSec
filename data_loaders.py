@@ -16,6 +16,14 @@ class IDataLoader(ABC):
         :param df: data held by the active party
         :param range_dict: the dict contains pairs of (passive parties') client IDs and
         their respective sample ranges provided by ISampleSelector.
+        For instance, assuming 3 passive parties, their Client IDs 'p1', 'p2', 'p3',
+        and their respective sample selectors S1, S2, S3,
+        the dict will be
+        {
+            'p1': S1.get_range(),
+            'p2': S2.get_range(),
+            'p3': S3.get_range(),
+        }
         """
         ...
 
@@ -47,7 +55,8 @@ class ISampleSelector(ABC):
     @abstractmethod
     def get_range(self) -> any:
         """
-        Return the range of sample IDs, in any form supported by pickle.
+        Return the range of sample IDs. The range can be any form supported by the Pickle module.
+        The results from all passive parties will be gathered and forwarded to the active party by the server.
         """
         ...
 

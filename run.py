@@ -69,20 +69,20 @@ def run_demo():
     )
 
 
-if __name__ == '__main__':
-    lt = time.localtime()
-    # log_pth = f'logs/log[{lt.tm_hour}-{lt.tm_min}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log'
-    logger.add(f'logs/server_log[{lt.tm_hour}-{lt.tm_min}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log',
-               format="{time} {level} {message}", level="INFO")
-    # # create folder for client data
+def clear():
+    # clean up caches
     data_dir = Path(parameters['data_dir'])
     for filename in os.listdir(data_dir):
+        if filename == '.gitkeep':
+            continue
         party_dir_pth = data_dir / filename
         shutil.rmtree(party_dir_pth)
 
+
+if __name__ == '__main__':
+    lt = time.localtime()
+    logger.add(f'logs/server_log[{lt.tm_hour} {lt.tm_min}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log',
+               format="{time} {level} {message}", level="INFO")
+    clear()
     run_demo()
-
-    # # clean up caches
-    for filename in os.listdir(data_dir):
-        party_dir_pth = data_dir / filename
-        shutil.rmtree(party_dir_pth)
+    clear()
