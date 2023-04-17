@@ -79,7 +79,8 @@ class ExampleDataLoader(IDataLoader):
         self.pos_idx = np.array(0)
         self.neg_idx = np.array(0)
         self.new_idx = None
-        self.cat_cols = ('default', 'housing', 'loan', 'contact', 'day', 'month', 'poutcome')
+        self.cat_cols = {'job', 'marital', 'education', 'default', 'housing',
+                         'loan', 'contact', 'month', 'poutcome', 'y'}
         self.set(df, range_dict)
 
     def id2cid(self, sample_id: str) -> str:
@@ -94,6 +95,7 @@ class ExampleDataLoader(IDataLoader):
         # convert Sample IDs of format 'Nxxxxxx' to integer
         self.max_ids = sorted([(cid, int(o[1][1:])) for cid, o in range_dict.items()], key=lambda x: x[1])
         data = []
+        self.cat_cols.intersection_update(df.columns)
         for col in df.columns:
             if col == 'ID':
                 continue
@@ -125,12 +127,14 @@ class ExampleDataLoader(IDataLoader):
 
 class ExampleSampleSelector(ISampleSelector):
     def __init__(self, df: pd.DataFrame):
-        cat_col = ['job', 'marital', 'education']
+        cat_cols = {'job', 'marital', 'education', 'default', 'housing',
+                    'loan', 'contact', 'month', 'poutcome', 'y'}
+        cat_cols.intersection_update(df.columns)
         data = []
         for col in df.columns:
             if col == 'ID':
                 continue
-            if col in cat_col:
+            if col in cat_cols:
                 data += [F.one_hot(torch.tensor(df[col].values), df[col].values.max() + 1)]
             else:
                 data += [torch.tensor(df[col].values).view(-1, 1)]

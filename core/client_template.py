@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -8,7 +9,8 @@ import numpy as np
 from flwr.common import Scalar
 from loguru import logger
 
-from core.fl_utils import ndarrays_to_param_bytes
+from core.utils import ndarrays_to_param_bytes
+from core.my_profiler import get_profiler, IProfiler
 from core.secagg import public_key_to_bytes, bytes_to_public_key, generate_key_pairs, generate_shared_key, \
     private_key_to_bytes, bytes_to_private_key
 from settings import DEBUG
@@ -34,6 +36,8 @@ class TrainClientTemplate(fl.client.NumPyClient):
         if self.reload():
             self.initialised = True
         else:
+            self.prf: IProfiler = get_profiler()
+            self.prf_test: IProfiler = get_profiler()
             self.shared_secret_dict = {}
             self.shared_seed_dict = {}
             self.secret_key_dict = {}
@@ -82,7 +86,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             if DEBUG:
                 logger.info(f'client {self.cid}: replying {str(config.keys())}')
             else:
-                logger.info(f'client {self.cid}: uploading public keys')
+                logger.info(f'client {self.cid}: uploading public keys, sized {sys.getsizeof(config)}')
             self.setup_round1(parameters, config, t)
             return t
         # rnd 2
@@ -91,7 +95,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             if DEBUG:
                 logger.info(f'client {self.cid}: receiving public keys from {str(config.keys())}')
             else:
-                logger.info(f'client {self.cid}: receiving public keys')
+                logger.info(f'client {self.cid}: receiving public keys, sized {sys.getsizeof(config)}')
             # logger.info(f'client {self.cid}: keys of secret key dict {str(self.secret_key_dict.keys())}')
             for cid, pk_bytes in config.items():
                 sk = bytes_to_private_key(self.secret_key_dict[cid])
@@ -188,10 +192,8 @@ class TrainClientTemplate(fl.client.NumPyClient):
         return self.__execute(parameters, config)
 
     def evaluate(
-        self, parameters: List[np.ndarray], config: Dict[str, Scalar]
+            self, parameters: List[np.ndarray], config: Dict[str, Scalar]
     ) -> Tuple[float, int, Dict[str, Scalar]]:
         params, num, metrics = self.__execute(parameters, config)
         metrics['parameters'] = ndarrays_to_param_bytes(params)
         return 0., num, metrics
-
-

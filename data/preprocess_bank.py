@@ -3,7 +3,7 @@ from pathlib import Path
 import pickle
 import re
 
-from core.preprocessing_utils import vertical_split, horizontal_split, categorical_values_to_int
+from data.preprocessing_utils import vertical_split, horizontal_split, categorical_values_to_int
 
 
 def preprocess_bank_dataset(train_pth: Path, test_pth: Path, out_pth=None, overwrite=False):
@@ -35,18 +35,15 @@ def preprocess_bank_dataset(train_pth: Path, test_pth: Path, out_pth=None, overw
     return df
 
 
-def partition(full_df, dir_pth, num_partitions):
+def partition(full_df, dir_pth, col_sets, num_partitions):
     # drop the 'duration' column
-    sub_dfs = vertical_split(full_df,
-                             [['ID', 'default', 'balance', 'housing', 'loan', 'contact', 'day', 'month',
-                               'campaign', 'pdays', 'previous', 'poutcome', 'y'],
-                              ['ID', 'age', 'job', 'marital', 'education']])
+    sub_dfs = vertical_split(full_df, col_sets)
     # dataframe of Active Party
     df_ap = sub_dfs[0]
-    # dataframe of Passive Party(s)
-    df_pp = sub_dfs[1]
-    # create partitions for 3 passive parties
-    df_pp_lst = horizontal_split(df_pp, num_partitions, ordered=True)
+    # create partitions for passive parties
+    df_pp_lst = []
+    for n, sub_df in zip(num_partitions, sub_dfs[1:]):
+        df_pp_lst += horizontal_split(sub_df, n, ordered=True)
 
     # save dfs
     df_ap.to_csv(dir_pth / 'p0_data.csv', index=False)
@@ -71,4 +68,8 @@ if __name__ == '__main__':
         col_mappings[col] = (arr.min(), arr.max())
     with open(dir_pth / 'mappings.pth', 'wb') as f:
         pickle.dump(col_mappings, f)
-    partition(df, dir_pth, 4)
+    cols = [['ID', 'housing', 'loan', 'contact', 'day', 'month',
+             'campaign', 'pdays', 'previous', 'poutcome', 'y'],
+            ['ID', 'default', 'balance'],
+            ['ID', 'age', 'job', 'marital', 'education']]
+    partition(df, dir_pth, cols, [2, 2])

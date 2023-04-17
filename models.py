@@ -2,8 +2,11 @@ import torch.nn.functional as F
 from torch import nn
 
 
-def generate_passive_party_local_module() -> nn.Module:
-    return ExamplePassviePartyLocalModule()
+def generate_passive_party_local_module(party_type: str) -> nn.Module:
+    return {
+        'A': ExamplePassviePartyLocalModuleA(),
+        'B': ExamplePassviePartyLocalModuleB(),
+    }[party_type]
 
 
 def generate_active_party_local_module() -> nn.Module:
@@ -18,9 +21,18 @@ def get_criterion():
     return nn.BCEWithLogitsLoss()
 
 
-class ExamplePassviePartyLocalModule(nn.Module):
+class ExamplePassviePartyLocalModuleA(nn.Module):
     def __init__(self):
-        super(ExamplePassviePartyLocalModule, self).__init__()
+        super(ExamplePassviePartyLocalModuleA, self).__init__()
+        self.fc = nn.Linear(3, 16, bias=False)
+
+    def forward(self, x):
+        return self.fc(x)
+
+
+class ExamplePassviePartyLocalModuleB(nn.Module):
+    def __init__(self):
+        super(ExamplePassviePartyLocalModuleB, self).__init__()
         self.fc = nn.Linear(20, 16, bias=False)
 
     def forward(self, x):
@@ -30,7 +42,7 @@ class ExamplePassviePartyLocalModule(nn.Module):
 class ExampleActivePartyLocalModule(nn.Module):
     def __init__(self):
         super(ExampleActivePartyLocalModule, self).__init__()
-        self.fc = nn.Linear(61, 16, bias=True)
+        self.fc = nn.Linear(58, 16, bias=True)
 
     def forward(self, x):
         return self.fc(x)
