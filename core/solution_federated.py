@@ -1,25 +1,20 @@
-import os
+
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import flwr as fl
 import numpy as np
-import pandas as pd
 import torch
 from flwr.common import FitIns, FitRes, Parameters, Scalar, ndarrays_to_parameters, parameters_to_ndarrays, \
     EvaluateIns, EvaluateRes
 from flwr.server import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from loguru import logger
-from torch import nn, optim
+from torch import optim
 
-from core.client_template import TrainClientTemplate
-from core.utils import pyobj2bytes, bytes2pyobj
-from core.my_profiler import IProfiler, get_profiler
-from core.secagg import quantize, reverse_quantize, encrypt, decrypt
-from data_loaders import get_data_loader, get_sample_selector, IDataLoader, ISampleSelector
-from models import generate_active_party_local_module, generate_passive_party_local_module, \
-    generate_global_module, get_criterion
+from core.secagg import reverse_quantize
+from core.utils import bytes2pyobj
+from models import generate_global_module, get_criterion
 from settings import *
 
 """=== Utility Functions ==="""
@@ -112,9 +107,16 @@ class TrainStrategy(fl.server.strategy.Strategy):
         elif self.stage == 1:
             logger.info(f"stage 1: broadcasting model weights and encrypted batch to passive parties")
             # broadcast the weights and the encrypted batch to all bank clients
-            config_dict.update(self.encrypted_batch)
-            fit_ins = FitIns(parameters=ndarrays_to_parameters(self.weights), config=config_dict)
-            ins_lst = [(proxy, fit_ins) for cid, proxy in cid_dict.items() if cid != '0']
+            # config_dict.update(self.encrypted_batch)
+            # fit_ins = FitIns(parameters=ndarrays_to_parameters(self.weights), config=config_dict)
+            # ins_lst = [(proxy, fit_ins) for cid, proxy in cid_dict.items() if cid != '0']
+            ins_lst = []
+            # broadcast the weights and the encrypted batch to clients by type
+            for idx, t in enumerate(INDEX_TO_TYPE):
+                cfg = config_dict.copy()
+                cfg[t] = self.encrypted_batch[t]
+                
+
         elif self.stage == 2:
             if DEBUG:
                 logger.info(f"stage 2: broadcasting client_grad to all clients {self.client_grad}")
@@ -167,7 +169,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
                 # logger.info(f"logit type {type(self.logit)}, dtype {self.logit.dtype}")
                 # broadcast to all bank clients
                 self.encrypted_batch = results[0][1].metrics
-                if DEBUG and LOGIC_TEST:
+                if DEBUG:
                     logger.info(f"server received encrypted batch:\n {self.encrypted_batch}")
             # if server_round == self.num_rnds, do nothing
             pass

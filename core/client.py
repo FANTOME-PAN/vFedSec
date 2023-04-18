@@ -11,7 +11,7 @@ from torch import nn, optim
 
 from core.client_template import TrainClientTemplate
 from core.secagg import quantize, reverse_quantize, encrypt, decrypt
-from core.utils import pyobj2bytes, bytes2pyobj
+from core.utils import pyobj2bytes, bytes2pyobj, pack_local_modules, unpack_local_modules
 from data_loaders import get_data_loader, get_sample_selector, IDataLoader, ISampleSelector
 from models import generate_active_party_local_module, generate_passive_party_local_module
 from settings import *
@@ -123,12 +123,18 @@ class TrainActiveParty(TrainClientTemplate):
         self.intermediate_output: torch.Tensor = self.ap_lm(data)
         wx = quantize([self.intermediate_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
         masked_wx = masking(server_rnd + 1, wx, self.cid, self.shared_seed_dict)
-        ret_dict = {}
-        for i, (sample_holder_cid, sample_id) in enumerate(ids):
-            key = self.shared_secret_dict[sample_holder_cid]
-            ret_dict[str(i)] = encrypt(key, sample_id.encode('ascii'))
-        return [masked_wx, labels] + \
-               [o.detach().numpy() for o in self.pp_lm.parameters()], 0, ret_dict
+        ret_dict = {t: [] for t in INDEX_TO_TYPE}
+        # for i, (sample_holder_cid, sample_id) in enumerate(ids):
+        #     key = self.shared_secret_dict[sample_holder_cid]
+        #     ret_dict[str(i)] = encrypt(key, sample_id.encode('ascii'))
+        for cids, sample_id in ids:
+            for cid in cids:
+                key = self.shared_secret_dict[cid]
+                ret_dict[CID_TO_TYPE[cid]].append(encrypt(key, sample_id.encode('ascii')))
+        ret_dict = {t: pyobj2bytes(lst) for t, lst in ret_dict.items()}
+        concatenated_parameters = pack_local_modules([[o.detach().numpy() for o in self.pp_lm_dict[t].parameters()]
+                                                      for t in INDEX_TO_TYPE])
+        return [masked_wx, labels] + concatenated_parameters, 0, ret_dict
 
     def stage2(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         self.recv_grad = torch.tensor(parameters[0])
@@ -174,13 +180,14 @@ class TrainPassiveParty(TrainClientTemplate):
         logger.info(f"Client {self.cid}: reading encrypted batch and computing masked results...")
         for param, given_param in zip(self.lm.parameters(), parameters):
             param.data = torch.tensor(given_param)
+        # retrieve the real config of type List[bytes]
+        config = bytes2pyobj(config[self.party_type])
         # try read batch
         key = self.shared_secret_dict['0']
         self.mask = torch.zeros(len(config), dtype=bool)
         ids = []
-        for str_i, encrypted_id in config.items():
+        for i, encrypted_id in enumerate(config):
             # logger.info(f'try decrypting {obj_bytes} of type {type(obj_bytes)}')
-            i = int(str_i)
             if (sample_id := try_decrypt_and_load(key, encrypted_id)) is not None:
                 self.mask[i] = True
                 ids += [(i, sample_id.decode('ascii'))]

@@ -31,4 +31,17 @@ def empty_parameters() -> Parameters:
     return ndarrays_to_parameters([])
 
 
-def pack_local_module_parameters(modules: List[List[np.ndarray]]) -> List[np.ndarray]:
+def pack_local_modules(modules: List[List[np.ndarray]]) -> List[np.ndarray]:
+    ret = []
+    for params in modules:
+        ret += [np.array(len(params))] + params
+    return ret
+
+
+def unpack_local_modules(concatenated_parameters: List[np.ndarray]) -> List[List[np.ndarray]]:
+    params_lst = []
+    while len(concatenated_parameters) > 0:
+        length = concatenated_parameters[0].item()
+        params_lst.append(concatenated_parameters[1: length + 1])
+        concatenated_parameters = concatenated_parameters[length + 1:]
+    return params_lst

@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
-from settings import BATCH_SIZE
+from settings import *
 
 
 class IDataLoader(ABC):
@@ -16,21 +16,22 @@ class IDataLoader(ABC):
         :param df: data held by the active party
         :param range_dict: the dict contains pairs of (passive parties') client IDs and
         their respective sample ranges provided by ISampleSelector.
-        For instance, assuming 3 passive parties, their Client IDs 'p1', 'p2', 'p3',
+        For instance, assuming 3 passive parties, their Client IDs '1', '2', '3',
         and their respective sample selectors S1, S2, S3,
         the dict will be
         {
-            'p1': S1.get_range(),
-            'p2': S2.get_range(),
-            'p3': S3.get_range(),
+            '1': S1.get_range(),
+            '2': S2.get_range(),
+            '3': S3.get_range(),
         }
         """
         ...
 
     @abstractmethod
-    def next_batch(self) -> Tuple[torch.FloatTensor, List[Tuple[str, str]], torch.Tensor]:
+    def next_batch(self) -> Tuple[torch.FloatTensor, List[Tuple[Tuple[str], str]], torch.Tensor]:
         """
-        :rtype: Tuple of 3 elements, i.e., the batched data, the list of (client_ID, sample_ID), and labels
+        :rtype: Tuple of 3 elements, i.e., the batched data, the list of (client_IDs, sample_ID), and labels;
+        client_IDs should be a tuple containing CIDs of all clients holding the given sample.
         """
         ...
 
@@ -73,7 +74,8 @@ class ExampleDataLoader(IDataLoader):
     def __init__(self, df: pd.DataFrame, range_dict: Dict[str, any], batch_size):
         self.data: torch.tensor = None
         self.ids: np.ndarray = None
-        self.max_ids = None
+        # self.max_ids = None
+        self.type2max_ids: Dict[str, list] = {t: [] for t in INDEX_TO_TYPE}
         self.batch_size = batch_size
         self.ptr = 0
         self.pos_idx = np.array(0)
@@ -83,17 +85,29 @@ class ExampleDataLoader(IDataLoader):
                          'loan', 'contact', 'month', 'poutcome', 'y'}
         self.set(df, range_dict)
 
-    def id2cid(self, sample_id: str) -> str:
+    def id2cid(self, sample_id: str) -> Tuple[str]:
         nid = int(sample_id[1:])
-        for cid, max_id in self.max_ids:
-            if nid <= max_id:
-                return cid
+        ret = []
+        for t in INDEX_TO_TYPE:
+            max_ids = self.type2max_ids[t]
+            for cid, max_id in max_ids:
+                if nid <= max_id:
+                    ret += [cid]
+                    break
+        if len(ret) == len(INDEX_TO_TYPE):
+            return tuple(ret)
         raise RuntimeError(f'{sample_id}: Unexpected ID')
 
     def set(self, df: pd.DataFrame, range_dict: Dict[str, any]):
         print(range_dict)
         # convert Sample IDs of format 'Nxxxxxx' to integer
-        self.max_ids = sorted([(cid, int(o[1][1:])) for cid, o in range_dict.items()], key=lambda x: x[1])
+        for cid, o in range_dict.items():
+            max_id = int(o[1][1:])
+            self.type2max_ids[CID_TO_TYPE[cid]].append((cid, max_id))
+        for lst in self.type2max_ids.values():
+            lst.sort(key=lambda x: x[1])
+        # self.max_ids = sorted([(cid, int(o[1][1:])) for cid, o in range_dict.items()], key=lambda x: x[1])
+
         data = []
         self.cat_cols.intersection_update(df.columns)
         for col in df.columns:

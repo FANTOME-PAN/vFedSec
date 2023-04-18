@@ -33,6 +33,8 @@ ACTIVE_PARTY_PRETRAINED_MODEL_PATH = None
 # num_rounds = 1 + 1.5N + 0.5 = 1.5(N+1)
 TRAINING_ROUNDS = int((NUM_ITERATION + 1) * 3 // 2)
 CID_TO_TYPE = {cid: t for t, cids in PASSIVE_PARTY_CIDs.items() for cid in cids}
-TYPE_TO_INDEX = {t: idx for t, idx in zip(PASSIVE_PARTY_CIDs.keys(), range(len(PASSIVE_PARTY_CIDs)))}
+INDEX_TO_TYPE = tuple(PASSIVE_PARTY_CIDs.keys())
+# TYPE_TO_INDEX = {t: idx for t, idx in zip(PASSIVE_PARTY_CIDs.keys(), range(len(PASSIVE_PARTY_CIDs)))}
+TYPE_TO_INDEX = {t: idx for idx, t in enumerate(INDEX_TO_TYPE)}
 CLIP_RANGE = 64
 TARGET_RANGE = 1 << 27
