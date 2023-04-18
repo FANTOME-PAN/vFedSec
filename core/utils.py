@@ -29,3 +29,6 @@ def bytes2pyobj(b: bytes) -> object:
 def empty_parameters() -> Parameters:
     """Utility function that generates empty Flower Parameters dataclass instance."""
     return ndarrays_to_parameters([])
+
+
+def pack_local_module_parameters(modules: List[List[np.ndarray]]) -> List[np.ndarray]:

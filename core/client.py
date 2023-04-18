@@ -10,11 +10,33 @@ from loguru import logger
 from torch import nn, optim
 
 from core.client_template import TrainClientTemplate
-from core.secagg import quantize, reverse_quantize, encrypt
+from core.secagg import quantize, reverse_quantize, encrypt, decrypt
 from core.utils import pyobj2bytes, bytes2pyobj
 from data_loaders import get_data_loader, get_sample_selector, IDataLoader, ISampleSelector
 from models import generate_active_party_local_module, generate_passive_party_local_module
 from settings import *
+
+
+def masking(seed_offset, x: np.ndarray, cid, shared_seed_dict: Dict, target_range=(1 << 32)) \
+        -> np.ndarray:
+    for other_cid, seed in shared_seed_dict.items():
+        np.random.seed(seed + seed_offset)
+        msk = np.random.randint(0, target_range, x.shape, dtype=np.int64)
+        if cid < other_cid:
+            x += msk
+        else:
+            x -= msk
+    return x
+
+
+def try_decrypt_and_load(key, ciphertext: bytes) -> Union[object, None]:
+    try:
+        plaintext = decrypt(key, ciphertext)
+        ret = bytes2pyobj(plaintext)
+        return ret
+    except:
+        return None
+
 
 """=== Client Class ==="""
 
@@ -29,19 +51,18 @@ class TrainActiveParty(TrainClientTemplate):
         super().__init__(cid, df_pth, client_dir)
         if not self.initialised:
             self.ap_lm: nn.Module = generate_active_party_local_module()
-            self.pp_lm_lst: Dict[str, nn.Module] = dict([(key, generate_passive_party_local_module(t))
-                                                         for key, t in PASSIVE_PARTY_CIDs.items()])
+            self.pp_lm_dict: Dict[str, nn.Module] = {key: generate_passive_party_local_module(t)
+                                                     for key, t in PASSIVE_PARTY_CIDs.items()}
             self.ap_optimiser = optim.SGD(self.ap_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
             # self.pp_optimiser = optim.SGD(self.pp_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
-            self.pp_optimisers = dict([(key, optim.SGD(
-                lm.parameters(), lr=LEARNING_RATE, momentum=0.9
-            )) for key, lm in self.pp_lm_lst.items()])
+            self.pp_optimisers = {key: optim.SGD(lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
+                                  for key, lm in self.pp_lm_dict.items()}
             self.loader: IDataLoader = None
-            self.type2pp_grads: Dict[str, np.ndarray] = dict([(key, np.array(0)) for key in PASSIVE_PARTY_CIDs.keys()])
+            self.type2pp_grads: Dict[str, np.ndarray] = {key: np.array(0) for key in PASSIVE_PARTY_CIDs.keys()}
             self.data = np.array(0)
             self.recv_grad = np.array(0)
             # self.pp_lm_size = sum([o.numel() for o in self.pp_lm.parameters()])
-            self.pp_lm_sizes = dict([(key, sum([o.numel() for o in lm.parameters()])) for key, lm in self.pp_lm_lst])
+            self.pp_lm_sizes = {key: sum([o.numel() for o in lm.parameters()]) for key, lm in self.pp_lm_dict}
 
     def setup_round2(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
         # load data
@@ -60,28 +81,40 @@ class TrainActiveParty(TrainClientTemplate):
         if server_rnd > 3:
             logger.info(f'Client {self.cid}: updating parameters with received gradients...')
             # need changes
-            grad = (parameters[0] + self.partial_grad) & 0xffffffff
-            if DEBUG:
-                logger.info(f"reconstructed grad = {str(grad)}")
+            for idx, party_type in enumerate(PASSIVE_PARTY_CIDs.keys()):
+                grad = self.type2pp_grads[party_type]
+                grad = (grad + parameters[idx]) & 0xffffffff
+                grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]
+                grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
+                self.type2pp_grads[party_type] = grad
+
+            # grad = (parameters[0] + self.partial_grad) & 0xffffffff
+            # if DEBUG:
+            #     logger.info(f"reconstructed grad = {str(grad)}")
             # grad -= (TARGET_RANGE * (len(self.shared_seed_dict) - 1)) >> 1
-            grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]
-            grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
+            # grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]
+            # grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
 
             if DEBUG:
                 logger.info(f"aggregate grad = {str(grad)}")
             # assign gradients
-            grad = torch.tensor(grad, dtype=torch.float)
-            for param in self.pp_lm.parameters():
-                _size = param.numel()
-                given_grad = grad[:_size].view(param.shape)
-                grad = grad[_size:]
-                param.grad = given_grad
-            # update passive parties' local module
-            self.pp_optimiser.step()
-            self.pp_optimiser.zero_grad()
+            for party_type, grad in self.type2pp_grads.items():
+                grad = torch.tensor(grad, dtype=torch.float)
+                pp_lm = self.pp_lm_dict[party_type]
+                optimiser = self.pp_optimisers[party_type]
+                for param in pp_lm.parameters():
+                    _size = param.numel()
+                    given_grad = grad[:_size].view(param.shape)
+                    grad = grad[_size:]
+                    param.grad = given_grad
+                # update passive parties' local module
+                optimiser.step()
+                optimiser.zero_grad()
             if 'stop' in config:
                 torch.save(self.ap_lm, ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
-                torch.save(self.pp_lm, PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
+                for party_type, pp_lm in self.pp_lm_dict.items():
+                    torch.save(pp_lm, PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH_FORMAT % party_type)
+                # torch.save(self.pp_lm, PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
                 return [], 0, {}
 
         logger.info('swift client: preparing batch and masked vectors...')
@@ -121,7 +154,8 @@ class TrainPassiveParty(TrainClientTemplate):
             self.weights = np.array(0)
             self.mask = np.array(0)
             self.selector: ISampleSelector = None
-            self.lm = generate_passive_party_local_module()
+            self.party_type = CID_TO_TYPE[cid]
+            self.lm = generate_passive_party_local_module(self.party_type)
             self.no_sample_selected = False
             self.output_shape = ()
             self.lm_size = sum([param.numel() for param in self.lm.parameters()])

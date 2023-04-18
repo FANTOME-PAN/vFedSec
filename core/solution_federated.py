@@ -30,27 +30,6 @@ def empty_parameters() -> Parameters:
     return ndarrays_to_parameters([])
 
 
-def masking(seed_offset, x: np.ndarray, cid, shared_seed_dict: Dict, target_range=(1 << 32)) \
-        -> np.ndarray:
-    for other_cid, seed in shared_seed_dict.items():
-        np.random.seed(seed + seed_offset)
-        msk = np.random.randint(0, target_range, x.shape, dtype=np.int64)
-        if cid < other_cid:
-            x += msk
-        else:
-            x -= msk
-    return x
-
-
-def try_decrypt_and_load(key, ciphertext: bytes) -> Union[bytes, None]:
-    try:
-        plaintext = decrypt(key, ciphertext)
-        ret = bytes2pyobj(plaintext)
-        return ret
-    except:
-        return None
-
-
 """=== Strategy Class ==="""
 
 
@@ -99,7 +78,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
             # add all cids to the config_dict as keys
             config_dict.update(dict(zip(cid_dict.keys(), [0] * len(cid_dict))))
             logger.info(f"server's requesting public keys...")
-            if DEBUG and LOGIC_TEST:
+            if DEBUG:
                 logger.info(f"send to clients {str(config_dict)}")
             fit_ins = FitIns(parameters=empty_parameters(), config=config_dict)
             return [(o, fit_ins) for o in cid_dict.values()]
