@@ -81,7 +81,7 @@ class TrainActiveParty(TrainClientTemplate):
         if server_rnd > 3:
             logger.info(f'Client {self.cid}: updating parameters with received gradients...')
             # need changes
-            for idx, party_type in enumerate(PASSIVE_PARTY_CIDs.keys()):
+            for idx, party_type in enumerate(INDEX_TO_TYPE):
                 grad = self.type2pp_grads[party_type]
                 grad = (grad + parameters[idx]) & 0xffffffff
                 grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]

@@ -13,7 +13,7 @@ from loguru import logger
 from torch import optim
 
 from core.secagg import reverse_quantize
-from core.utils import bytes2pyobj
+from core.utils import bytes2pyobj, unpack_local_modules
 from models import generate_global_module, get_criterion
 from settings import *
 
@@ -35,7 +35,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
         self.server_dir = server_dir
         self.public_keys_dict = {}
         self.fwd_dict = {}
-        self.agg_grad = np.zeros(26)
+        self.agg_grad: List[np.ndarray] = []
         self.stage = 0
         self.num_rnds = TRAINING_ROUNDS << 1
         self.label = np.array(0)
@@ -63,7 +63,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
     ) -> List[Tuple[ClientProxy, Union[FitIns]]]:
         """Configure the next round of training."""
         cid_dict: Dict[str, ClientProxy] = client_manager.all()
-        config_dict = {"round": server_round}
+        config_dict: Dict[str, Scalar] = {"round": server_round}
         logger.info(f"[START] server round {server_round}")
         if DEBUG:
             logger.info(f'GPU STATUS: {torch.cuda.is_available()}')
@@ -102,7 +102,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
             if server_round == self.num_rnds:
                 config_dict['stop'] = 1
                 torch.save(self.gm, GLOBAL_MODULE_SAVE_PATH)
-            fit_ins = FitIns(parameters=ndarrays_to_parameters([self.agg_grad]), config=config_dict)
+            fit_ins = FitIns(parameters=ndarrays_to_parameters(self.agg_grad), config=config_dict)
             ins_lst = [(cid_dict['0'], fit_ins)]
         elif self.stage == 1:
             logger.info(f"stage 1: broadcasting model weights and encrypted batch to passive parties")
@@ -115,7 +115,8 @@ class TrainStrategy(fl.server.strategy.Strategy):
             for idx, t in enumerate(INDEX_TO_TYPE):
                 cfg = config_dict.copy()
                 cfg[t] = self.encrypted_batch[t]
-                
+                fit_ins = FitIns(parameters=ndarrays_to_parameters(self.weights[idx]), config=cfg)
+                ins_lst += [(proxy, fit_ins) for cid, proxy in cid_dict.items() if cid in PASSIVE_PARTY_CIDs[t]]
 
         elif self.stage == 2:
             if DEBUG:
@@ -164,6 +165,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
             if server_round < self.num_rnds:
                 arrs = parameters_to_ndarrays(results[0][1].parameters)
                 masked_wx, self.label, self.weights = arrs[0], arrs[1], arrs[2:]
+                self.weights = unpack_local_modules(self.weights)
                 self.label = torch.from_numpy(self.label)
                 self.intermediate_output = masked_wx
                 # logger.info(f"logit type {type(self.logit)}, dtype {self.logit.dtype}")
@@ -198,17 +200,19 @@ class TrainStrategy(fl.server.strategy.Strategy):
             self.gm_optimizer.step()
             self.gm_optimizer.zero_grad()
         elif self.stage == 2:
-            self.agg_grad = None
+            self.agg_grad = [0 for _ in INDEX_TO_TYPE]
             for client, res in results:
                 if client.cid == '0':
                     continue
-                t = parameters_to_ndarrays(res.parameters)
+                masked_grad = parameters_to_ndarrays(res.parameters)[0]
+                idx = TYPE_TO_INDEX[CID_TO_TYPE[client.cid]]
                 if DEBUG:
-                    logger.info(f'server received {t}')
-                if self.agg_grad is None:
-                    self.agg_grad = t[0]
-                else:
-                    self.agg_grad += t[0]
+                    logger.info(f'server received {masked_grad}')
+                self.agg_grad[idx] += masked_grad
+                # if self.agg_grad is None:
+                #     self.agg_grad = t[0]
+                # else:
+                #     self.agg_grad += t[0]
             pass
         else:
             raise AssertionError("Stage number should be 0, 1, or 2")
