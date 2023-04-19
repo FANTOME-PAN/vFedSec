@@ -42,3 +42,4 @@ INDEX_TO_TYPE = tuple(PASSIVE_PARTY_CIDs.keys())
 TYPE_TO_INDEX = {t: idx for idx, t in enumerate(INDEX_TO_TYPE)}
 CLIP_RANGE = 64
 TARGET_RANGE = 1 << 27
+ENABLE_PROFILER = True
