@@ -42,7 +42,7 @@ class ExamplePassviePartyLocalModuleB(nn.Module):
 class ExampleActivePartyLocalModule(nn.Module):
     def __init__(self):
         super(ExampleActivePartyLocalModule, self).__init__()
-        self.fc = nn.Linear(58, 16, bias=True)
+        self.fc = nn.Linear(57, 16, bias=True)
 
     def forward(self, x):
         return self.fc(x)

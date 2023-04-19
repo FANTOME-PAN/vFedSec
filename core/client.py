@@ -51,18 +51,18 @@ class TrainActiveParty(TrainClientTemplate):
         super().__init__(cid, df_pth, client_dir)
         if not self.initialised:
             self.ap_lm: nn.Module = generate_active_party_local_module()
-            self.pp_lm_dict: Dict[str, nn.Module] = {key: generate_passive_party_local_module(t)
-                                                     for key, t in PASSIVE_PARTY_CIDs.items()}
+            self.pp_lm_dict: Dict[str, nn.Module] = {t: generate_passive_party_local_module(t)
+                                                     for t in INDEX_TO_TYPE}
             self.ap_optimiser = optim.SGD(self.ap_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
             # self.pp_optimiser = optim.SGD(self.pp_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
-            self.pp_optimisers = {key: optim.SGD(lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
-                                  for key, lm in self.pp_lm_dict.items()}
+            self.pp_optimisers = {t: optim.SGD(lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
+                                  for t, lm in self.pp_lm_dict.items()}
             self.loader: IDataLoader = None
             self.type2pp_grads: Dict[str, np.ndarray] = {key: np.array(0) for key in PASSIVE_PARTY_CIDs.keys()}
             self.data = np.array(0)
             self.recv_grad = np.array(0)
             # self.pp_lm_size = sum([o.numel() for o in self.pp_lm.parameters()])
-            self.pp_lm_sizes = {key: sum([o.numel() for o in lm.parameters()]) for key, lm in self.pp_lm_dict}
+            self.pp_lm_sizes = {t: sum([o.numel() for o in lm.parameters()]) for t, lm in self.pp_lm_dict.items()}
 
     def setup_round2(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
         # load data

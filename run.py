@@ -7,7 +7,9 @@ import flwr as fl
 from flwr.server import Server, ServerConfig, SimpleClientManager
 from loguru import logger
 
-from core.solution_federated import train_strategy_factory, train_client_factory, TRAINING_ROUNDS
+from core.solution_federated import train_strategy_factory
+from core.client import train_client_factory
+from settings import TRAINING_ROUNDS, CID_TO_DATA_PATH
 
 parameters = {
     'num_clients_per_round': 5,
@@ -18,8 +20,7 @@ parameters = {
 
 
 def bank_client_fn(cid):
-    dir_pth = Path('data/bank')
-    return train_client_factory(cid, dir_pth / f'p{cid}_data.csv', Path(f'client_data/party_{cid}'))
+    return train_client_factory(cid, CID_TO_DATA_PATH[cid], Path(f'client_data/party_{cid}'))
 
 
 def start_simulation(

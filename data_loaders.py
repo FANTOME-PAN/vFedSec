@@ -82,7 +82,7 @@ class ExampleDataLoader(IDataLoader):
         self.neg_idx = np.array(0)
         self.new_idx = None
         self.cat_cols = {'job', 'marital', 'education', 'default', 'housing',
-                         'loan', 'contact', 'month', 'poutcome', 'y'}
+                         'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
         self.set(df, range_dict)
 
     def id2cid(self, sample_id: str) -> Tuple[str]:
@@ -108,15 +108,18 @@ class ExampleDataLoader(IDataLoader):
             lst.sort(key=lambda x: x[1])
         # self.max_ids = sorted([(cid, int(o[1][1:])) for cid, o in range_dict.items()], key=lambda x: x[1])
 
-        data = []
+        data: List[torch.Tensor] = []
         self.cat_cols.intersection_update(df.columns)
         for col in df.columns:
-            if col == 'ID':
+            if col in ['ID', 'y']:
                 continue
             if col in self.cat_cols:
-                data += [F.one_hot(torch.tensor(df[col].values), df[col].values.max() + 1)]
+                # subtract min value from the array, in case some categorical values do not start from 0.
+                d_min, d_max = df[col].values.min(), df[col].values.max()
+                data += [F.one_hot(torch.tensor(df[col].values) - d_min, d_max - d_min + 1)]
             else:
                 data += [torch.tensor(df[col].values).view(-1, 1)]
+        data += [torch.tensor(df['y'].values).view(-1, 1)]
         data = torch.cat(data, dim=1).float()
         self.ids = df['ID'].values.astype(str)
         self.data = data
@@ -142,7 +145,7 @@ class ExampleDataLoader(IDataLoader):
 class ExampleSampleSelector(ISampleSelector):
     def __init__(self, df: pd.DataFrame):
         cat_cols = {'job', 'marital', 'education', 'default', 'housing',
-                    'loan', 'contact', 'month', 'poutcome', 'y'}
+                    'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
         cat_cols.intersection_update(df.columns)
         data = []
         for col in df.columns:
