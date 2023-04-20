@@ -21,7 +21,7 @@ def stochastic_round(arr: np.ndarray):
 
 def quantize(weight: List[np.ndarray], clipping_range: float, target_range: int) -> List[np.ndarray]:
     quantized_list = []
-    check_clipping_range(weight, clipping_range)
+    # check_clipping_range(weight, clipping_range)
     quantizer = target_range / (2 * clipping_range)
     for arr in weight:
         # stochastic quantization

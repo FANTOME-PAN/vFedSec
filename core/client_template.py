@@ -13,7 +13,7 @@ from core.utils import ndarrays_to_param_bytes
 from core.my_profiler import get_profiler, IProfiler
 from core.secagg import public_key_to_bytes, bytes_to_public_key, generate_key_pairs, generate_shared_key, \
     private_key_to_bytes, bytes_to_private_key
-from settings import DEBUG
+from settings import DEBUG, ENABLE_PROFILER
 
 
 def sum_func(x):
@@ -37,7 +37,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             self.initialised = True
         else:
             self.prf: IProfiler = get_profiler()
-            self.prf_test: IProfiler = get_profiler()
+            self.total_prf = get_profiler()
             self.shared_secret_dict = {}
             self.shared_seed_dict = {}
             self.secret_key_dict = {}
@@ -46,6 +46,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             self.partial_grad = np.array(0)
             self.recv_grad = np.array(0)
             self.intermediate_output = np.array(0)
+            self.log_path = None
 
     def check_stage(self, stage):
         # init
@@ -74,7 +75,11 @@ class TrainClientTemplate(fl.client.NumPyClient):
         # rnd 1
         # generate keys and reply with public keys
         if rnd == 1:
+            self.log_path = config.pop('log_path')
+            logger.add(self.log_path, format="{time} {level} {message}", level="INFO")
             logger.info(f'client {self.cid}: generating key pairs')
+            if ENABLE_PROFILER:
+                self.prf.tic()
             for cid in config:
                 if cid == self.cid:
                     continue
@@ -83,6 +88,9 @@ class TrainClientTemplate(fl.client.NumPyClient):
                 config[cid] = public_key_to_bytes(pk)
             config.pop(self.cid)
             t = ([], 0, config)
+            if ENABLE_PROFILER:
+                self.prf.toc()
+                self.prf.upload(config)
             if DEBUG:
                 logger.info(f'client {self.cid}: replying {str(config.keys())}')
             else:
@@ -97,6 +105,9 @@ class TrainClientTemplate(fl.client.NumPyClient):
             else:
                 logger.info(f'client {self.cid}: receiving public keys, sized {sys.getsizeof(config)}')
             # logger.info(f'client {self.cid}: keys of secret key dict {str(self.secret_key_dict.keys())}')
+            if ENABLE_PROFILER:
+                self.prf.download(config)
+                self.prf.tic()
             for cid, pk_bytes in config.items():
                 sk = bytes_to_private_key(self.secret_key_dict[cid])
                 pk = bytes_to_public_key(pk_bytes)
@@ -106,6 +117,8 @@ class TrainClientTemplate(fl.client.NumPyClient):
                 for i in range(0, len(shared_key), 4):
                     seed32 ^= int.from_bytes(shared_key[i:i + 4], 'little')
                 self.shared_seed_dict[cid] = np.array(seed32, dtype=np.int32)
+            if ENABLE_PROFILER:
+                self.prf.toc()
             if DEBUG:
                 logger.info(f'client {self.cid}: shared seed {str(self.shared_seed_dict)}')
             t = ([], 0, {})
@@ -161,7 +174,6 @@ class TrainClientTemplate(fl.client.NumPyClient):
 
         if rnd <= 2:
             ret = self.setup(rnd, parameters, config)
-            self.cache()
             return ret
 
         # rnd 3 -> N, joint training
@@ -172,6 +184,23 @@ class TrainClientTemplate(fl.client.NumPyClient):
             ret = self.stage0(rnd, parameters, config)
             if 'stop' in config:
                 logger.info('Client 0: stop signal is detected. abort federated training')
+
+                self.total_prf.toc()
+                txt = f'TRAIN:\ntotal_cpu_time = {self.total_prf.get_cpu_time()}, ' \
+                      f'overhead = {self.prf.get_cpu_time() - self.prf.get_cpu_time(include_overhead=False)}\n' \
+                      f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
+                      f'overhead = {self.prf.get_num_download_bytes() - self.prf.get_num_download_bytes(include_overhead=False)}\n' \
+                      f'total_upload_bytes = {self.prf.get_num_upload_bytes()}, ' \
+                      f'overhead = {self.prf.get_num_upload_bytes() - self.prf.get_num_upload_bytes(include_overhead=False)}\n' \
+                      f'TEST:\ntotal_cpu_time = {self.prf.get_cpu_time(test_phase=True)}, ' \
+                      f'overhead = {self.prf.get_cpu_time(test_phase=True) - self.prf.get_cpu_time(include_overhead=False, test_phase=True)}\n' \
+                      f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
+                      f'overhead = {self.prf.get_num_download_bytes(test_phase=True) - self.prf.get_num_download_bytes(include_overhead=False, test_phase=True)}\n' \
+                      f'total_upload_bytes = {self.prf.get_num_upload_bytes()}, ' \
+                      f'overhead = {self.prf.get_num_upload_bytes(test_phase=True) - self.prf.get_num_upload_bytes(include_overhead=False, test_phase=True)}'
+
+                logger.info(f'\n========\nclient {self.cid}:\n{txt}\n========\n')
+
                 ret = ([], 0, {})
         # stage 1
         # BANK ONLY, reply with masked wx
@@ -182,18 +211,23 @@ class TrainClientTemplate(fl.client.NumPyClient):
             ret = self.stage2(rnd, parameters, config)
         else:
             raise AssertionError()
-
-        self.cache()
         return ret
 
     def fit(
             self, parameters: List[np.ndarray], config: dict
     ) -> Tuple[List[np.ndarray], int, dict]:
-        return self.__execute(parameters, config)
+        self.total_prf.tic()
+        ret = self.__execute(parameters, config)
+        self.total_prf.toc()
+        self.cache()
+        return ret
 
     def evaluate(
             self, parameters: List[np.ndarray], config: Dict[str, Scalar]
     ) -> Tuple[float, int, Dict[str, Scalar]]:
+        self.total_prf.tic()
         params, num, metrics = self.__execute(parameters, config)
         metrics['parameters'] = ndarrays_to_param_bytes(params)
+        self.total_prf.toc()
+        self.cache()
         return 0., num, metrics

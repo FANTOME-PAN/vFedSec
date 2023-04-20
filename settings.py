@@ -15,7 +15,7 @@ PASSIVE_PARTY_CIDs = {
 
 
 """Training hyper-parameters"""
-NUM_ITERATION = 21  # odd
+NUM_ITERATION = 5  # odd
 LEARNING_RATE = 0.01
 BATCH_SIZE = 256
 
