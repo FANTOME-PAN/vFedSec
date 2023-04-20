@@ -74,7 +74,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
             # add all cids to the config_dict as keys
             config_dict.update(dict(zip(cid_dict.keys(), [0] * len(cid_dict))))
             lt = time.localtime()
-            config_dict['log_path'] = f'logs/clients_log[{lt.tm_hour} {lt.tm_min}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log'
+            config_dict['log_path'] = f'logs/clients_log[{lt.tm_hour} {lt.tm_min} {lt.tm_sec}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log'
             logger.info(f"server's requesting public keys...")
             if DEBUG:
                 logger.info(f"send to clients {str(config_dict)}")
