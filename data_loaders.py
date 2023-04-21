@@ -70,9 +70,11 @@ def get_sample_selector(df: pd.DataFrame) -> ISampleSelector:
     return ExampleSampleSelector(df)
 
 
-categorical_columns = {'job', 'marital', 'education', 'default', 'housing',
-                       'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
-target_column = 'y'
+categorical_columns = {
+    'pid', 'cms_group_id', 'final_gender_code', 'age_level', 'pvalue_level',
+    'shopping_level', 'occupation', 'new_user_class_level ', 'cate_id', 'brand'
+}
+target_column = 'clk'
 
 
 class ExampleDataLoader(IDataLoader):
