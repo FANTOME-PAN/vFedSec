@@ -157,7 +157,7 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.upload([masked_wx, labels], [masked_wx, labels])
-            self.prf.upload(concatenated_parameters, concatenated_parameters)
+            self.prf.upload(concatenated_parameters, concatenated_parameters, not_in_test=True)
             org_ret_dict = {t: [] for t in INDEX_TO_TYPE}
             for cids, sample_id in ids:
                 for cid in cids:
@@ -223,8 +223,9 @@ class TrainPassiveParty(TrainClientTemplate):
     def stage1(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         logger.info(f"Client {self.cid}: reading encrypted batch and computing masked results...")
         if ENABLE_PROFILER:
-            self.prf.download(parameters, parameters)
-            self.prf.download(server_rnd, server_rnd)
+            self.prf.download(parameters, parameters, not_in_test=True)
+            self.prf.download(server_rnd, server_rnd, not_in_test=True)
+            prv_config = config
             self.prf.tic()
         for param, given_param in zip(self.lm.parameters(), parameters):
             param.data = torch.tensor(given_param)
@@ -252,7 +253,7 @@ class TrainPassiveParty(TrainClientTemplate):
         ids = sorted(ids, key=lambda x: x[0])
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
-            self.prf.download(config, ids)
+            self.prf.download(prv_config, ids)
             self.prf.tic()
         partial_batch_data = self.selector.select([o[1] for o in ids])
         self.no_sample_selected = True if len(ids) == 0 else False
