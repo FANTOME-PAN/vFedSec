@@ -52,9 +52,9 @@ class ExampleGlobalModule(nn.Module):
     def __init__(self):
         super(ExampleGlobalModule, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(64, 32),
+            nn.Linear(64, 16),
             nn.ReLU(inplace=True),
-            nn.Linear(32, 1)
+            nn.Linear(16, 1)
         )
 
     def forward(self, x):
