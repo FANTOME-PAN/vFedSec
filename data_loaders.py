@@ -70,6 +70,13 @@ def get_sample_selector(df: pd.DataFrame) -> ISampleSelector:
     return ExampleSampleSelector(df)
 
 
+categorical_columns = {
+    'pid', 'cms_group_id', 'final_gender_code', 'age_level', 'pvalue_level',
+    'shopping_level', 'occupation', 'new_user_class_level ', 'cate_id', 'brand'
+}
+target_column = 'clk'
+
+
 class ExampleDataLoader(IDataLoader):
     def __init__(self, df: pd.DataFrame, range_dict: Dict[str, any], batch_size):
         self.data: torch.tensor = None
@@ -81,8 +88,7 @@ class ExampleDataLoader(IDataLoader):
         self.pos_idx = np.array(0)
         self.neg_idx = np.array(0)
         self.new_idx = None
-        self.cat_cols = {'job', 'marital', 'education', 'default', 'housing',
-                         'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
+        self.cat_cols = categorical_columns.copy()
         self.set(df, range_dict)
 
     def id2cid(self, sample_id: str) -> Tuple[str]:
@@ -99,7 +105,6 @@ class ExampleDataLoader(IDataLoader):
         raise RuntimeError(f'{sample_id}: Unexpected ID')
 
     def set(self, df: pd.DataFrame, range_dict: Dict[str, any]):
-        print(range_dict)
         # convert Sample IDs of format 'Nxxxxxx' to integer
         for cid, o in range_dict.items():
             max_id = int(o[1][1:])
@@ -111,7 +116,7 @@ class ExampleDataLoader(IDataLoader):
         data: List[torch.Tensor] = []
         self.cat_cols.intersection_update(df.columns)
         for col in df.columns:
-            if col in ['ID', 'y']:
+            if col in ['ID', target_column]:
                 continue
             if col in self.cat_cols:
                 # subtract min value from the array, in case some categorical values do not start from 0.
@@ -119,7 +124,7 @@ class ExampleDataLoader(IDataLoader):
                 data += [F.one_hot(torch.tensor(df[col].values) - d_min, d_max - d_min + 1)]
             else:
                 data += [torch.tensor(df[col].values).view(-1, 1)]
-        data += [torch.tensor(df['y'].values).view(-1, 1)]
+        data += [torch.tensor(df[target_column].values).view(-1, 1)]
         data = torch.cat(data, dim=1).float()
         self.ids = df['ID'].values.astype(str)
         self.data = data
@@ -144,8 +149,7 @@ class ExampleDataLoader(IDataLoader):
 
 class ExampleSampleSelector(ISampleSelector):
     def __init__(self, df: pd.DataFrame):
-        cat_cols = {'job', 'marital', 'education', 'default', 'housing',
-                    'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
+        cat_cols = categorical_columns.copy()
         cat_cols.intersection_update(df.columns)
         data = []
         for col in df.columns:

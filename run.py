@@ -82,7 +82,7 @@ def clear():
 
 if __name__ == '__main__':
     lt = time.localtime()
-    logger.add(f'logs/server_log[{lt.tm_hour} {lt.tm_min}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log',
+    logger.add(f'logs/server_log[{lt.tm_hour} {lt.tm_min} {lt.tm_sec}][{lt.tm_mday}-{lt.tm_mon}-{lt.tm_year}].log',
                format="{time} {level} {message}", level="INFO")
     clear()
     run_demo()
