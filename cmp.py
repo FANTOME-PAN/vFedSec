@@ -81,8 +81,8 @@ if __name__ == "__main__":
 
     for batch_size in [1, 2, 4, 8, 16, 32, 64]:
         print(f'batch size {batch_size}:')
-        matrix_a = np.random.randint(low=0, high=8, size=(batch_size, 3))
-        matrix_b = np.random.randint(low=0, high=8, size=(3, 16))
+        matrix_a = np.random.randint(low=0, high=8, size=(batch_size, 8))
+        matrix_b = np.random.randint(low=0, high=8, size=(8, 8))
         timer.tic()
         result = paillier_matrix_multiply(matrix_a.tolist(), matrix_b.tolist(), public_key, secret_key)
         tr = timer.toc()
@@ -93,12 +93,3 @@ if __name__ == "__main__":
             simulate_secure_aggregation(matrix_a, matrix_b)
             total_time += timer.toc()
         print(f'\tSA cpu_time = {total_time / 1000}\n')
-    # print("Matrix A:")
-    # for row in matrix_a:
-    #     print(row)
-    # print("\nMatrix B:")
-    # for row in matrix_b:
-    #     print(row)
-    # print("\nPaillier Encrypted Matrix Multiplication Result:")
-    # for row in result:
-    #     print(row)
