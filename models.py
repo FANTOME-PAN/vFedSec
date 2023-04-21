@@ -24,7 +24,7 @@ def get_criterion():
 class ExamplePassviePartyLocalModuleA(nn.Module):
     def __init__(self):
         super(ExamplePassviePartyLocalModuleA, self).__init__()
-        self.fc = nn.Linear(3, 16, bias=False)
+        self.fc = nn.Linear(3, 64, bias=False)
 
     def forward(self, x):
         return self.fc(x)
@@ -33,7 +33,7 @@ class ExamplePassviePartyLocalModuleA(nn.Module):
 class ExamplePassviePartyLocalModuleB(nn.Module):
     def __init__(self):
         super(ExamplePassviePartyLocalModuleB, self).__init__()
-        self.fc = nn.Linear(20, 16, bias=False)
+        self.fc = nn.Linear(20, 64, bias=False)
 
     def forward(self, x):
         return self.fc(x)
@@ -42,7 +42,7 @@ class ExamplePassviePartyLocalModuleB(nn.Module):
 class ExampleActivePartyLocalModule(nn.Module):
     def __init__(self):
         super(ExampleActivePartyLocalModule, self).__init__()
-        self.fc = nn.Linear(57, 16, bias=True)
+        self.fc = nn.Linear(57, 64, bias=True)
 
     def forward(self, x):
         return self.fc(x)
@@ -51,7 +51,11 @@ class ExampleActivePartyLocalModule(nn.Module):
 class ExampleGlobalModule(nn.Module):
     def __init__(self):
         super(ExampleGlobalModule, self).__init__()
-        self.fc = nn.Linear(16, 1)
+        self.fc = nn.Sequential(
+            nn.Linear(64, 32),
+            nn.ReLU(inplace=True),
+            nn.Linear(32, 1)
+        )
 
     def forward(self, x):
         out = F.relu(x)
