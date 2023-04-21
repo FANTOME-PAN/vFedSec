@@ -23,7 +23,7 @@ BATCH_SIZE = 256
 """Paths"""
 # Please specify the path to the data of each party.
 CID_TO_DATA_PATH = {
-    str(cid): f'data/bank/p{cid}_data.csv' for cid in range(5)
+    str(cid): f'data/income/p{cid}_data.csv' for cid in range(5)
 }
 ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH = 'models/active_party_local_module.pth'
 PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH_FORMAT = 'models/passive_party_local_module_%s.pth'
