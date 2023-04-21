@@ -85,7 +85,8 @@ class TrainActiveParty(TrainClientTemplate):
         if server_rnd > 3:
             logger.info(f'Client {self.cid}: updating parameters with received gradients...')
             if ENABLE_PROFILER:
-                self.prf.download(parameters, parameters)
+                self.prf.download(parameters, parameters, not_in_test=True)
+                print(f'trian: {self.prf.get_num_download_bytes()}, test: {self.prf.get_num_download_bytes(test_phase=True)}')
                 self.prf.tic()
             # need changes
             for idx, party_type in enumerate(INDEX_TO_TYPE):
@@ -95,7 +96,7 @@ class TrainActiveParty(TrainClientTemplate):
                 grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
                 self.type2pp_grads[party_type] = grad
             if ENABLE_PROFILER:
-                self.prf.toc()
+                self.prf.toc(not_in_test=True)
 
             for party_type, grad in self.type2pp_grads.items():
                 if ENABLE_PROFILER:
@@ -110,13 +111,13 @@ class TrainActiveParty(TrainClientTemplate):
                     grad = grad[_size:]
                     param.grad = given_grad
                 if ENABLE_PROFILER:
-                    self.prf.toc(is_overhead=False)
+                    self.prf.toc(is_overhead=False, not_in_test=True)
                     self.prf.tic()
                 # update passive parties' local module
                 optimiser.step()
                 optimiser.zero_grad()
                 if ENABLE_PROFILER:
-                    self.prf.toc(is_overhead=False)
+                    self.prf.toc(is_overhead=False, not_in_test=True)
             if 'stop' in config:
                 torch.save(self.ap_lm, ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
                 for party_type, pp_lm in self.pp_lm_dict.items():
@@ -314,9 +315,9 @@ class TrainPassiveParty(TrainClientTemplate):
                   f'overhead = {self.prf.get_num_upload_bytes() - self.prf.get_num_upload_bytes(include_overhead=False)}\n' \
                   f'TEST:\ntotal_cpu_time = {self.prf.get_cpu_time(test_phase=True)}, ' \
                   f'overhead = {self.prf.get_cpu_time(test_phase=True) - self.prf.get_cpu_time(include_overhead=False, test_phase=True)}\n' \
-                  f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
+                  f'total_download_bytes = {self.prf.get_num_download_bytes(test_phase=True)}, ' \
                   f'overhead = {self.prf.get_num_download_bytes(test_phase=True) - self.prf.get_num_download_bytes(include_overhead=False, test_phase=True)}\n' \
-                  f'total_upload_bytes = {self.prf.get_num_upload_bytes()}, ' \
+                  f'total_upload_bytes = {self.prf.get_num_upload_bytes(test_phase=True)}, ' \
                   f'overhead = {self.prf.get_num_upload_bytes(test_phase=True) - self.prf.get_num_upload_bytes(include_overhead=False, test_phase=True)}'
 
             logger.info(f'\n========\nclient {self.cid}:\n{txt}\n========\n')

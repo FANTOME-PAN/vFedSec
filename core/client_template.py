@@ -194,9 +194,9 @@ class TrainClientTemplate(fl.client.NumPyClient):
                       f'overhead = {self.prf.get_num_upload_bytes() - self.prf.get_num_upload_bytes(include_overhead=False)}\n' \
                       f'TEST:\ntotal_cpu_time = {self.prf.get_cpu_time(test_phase=True)}, ' \
                       f'overhead = {self.prf.get_cpu_time(test_phase=True) - self.prf.get_cpu_time(include_overhead=False, test_phase=True)}\n' \
-                      f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
+                      f'total_download_bytes = {self.prf.get_num_download_bytes(test_phase=True)}, ' \
                       f'overhead = {self.prf.get_num_download_bytes(test_phase=True) - self.prf.get_num_download_bytes(include_overhead=False, test_phase=True)}\n' \
-                      f'total_upload_bytes = {self.prf.get_num_upload_bytes()}, ' \
+                      f'total_upload_bytes = {self.prf.get_num_upload_bytes(test_phase=True)}, ' \
                       f'overhead = {self.prf.get_num_upload_bytes(test_phase=True) - self.prf.get_num_upload_bytes(include_overhead=False, test_phase=True)}'
 
                 logger.info(f'\n========\nclient {self.cid}:\n{txt}\n========\n')
