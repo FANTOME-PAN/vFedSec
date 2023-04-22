@@ -40,7 +40,7 @@ def get_profiler() -> IProfiler:
 
 def my_getsizeof(obj: object) -> int:
     s = sys.getsizeof(obj)
-    if isinstance(obj, Sequence):
+    if isinstance(obj, list) or isinstance(obj, tuple):
         for o in obj:
             s += my_getsizeof(o)
     elif isinstance(obj, dict):
