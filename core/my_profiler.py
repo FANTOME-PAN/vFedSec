@@ -1,4 +1,5 @@
 from abc import abstractmethod, ABC
+from collections.abc import Sequence
 import sys
 import time
 
@@ -37,6 +38,17 @@ def get_profiler() -> IProfiler:
     return MySimpleProfiler()
 
 
+def my_getsizeof(obj: object) -> int:
+    s = sys.getsizeof(obj)
+    if isinstance(obj, Sequence):
+        for o in obj:
+            s += my_getsizeof(o)
+    elif isinstance(obj, dict):
+        for k in obj:
+            s += my_getsizeof(obj[k])
+    return s
+
+
 class MySimpleProfiler(IProfiler):
 
     def __init__(self):
@@ -68,8 +80,8 @@ class MySimpleProfiler(IProfiler):
         return t
 
     def download(self, obj, original_obj=None, not_in_test=False):
-        original_size = sys.getsizeof(original_obj) if original_obj is not None else 0
-        s = sys.getsizeof(obj)
+        original_size = my_getsizeof(original_obj) if original_obj is not None else 0
+        s = my_getsizeof(obj)
         overhead = s - original_size
         self.download_bytes += s
         self.download_overhead_bytes += overhead
@@ -79,8 +91,8 @@ class MySimpleProfiler(IProfiler):
         return s
 
     def upload(self, obj, original_obj=None, not_in_test=False):
-        original_size = sys.getsizeof(original_obj) if original_obj is not None else 0
-        s = sys.getsizeof(obj)
+        original_size = my_getsizeof(original_obj) if original_obj is not None else 0
+        s = my_getsizeof(obj)
         if original_size > s:
             raise RuntimeError('what?')
         overhead = s - original_size
