@@ -84,10 +84,9 @@ class TrainActiveParty(TrainClientTemplate):
         # skip the first stage 0
         if server_rnd > 3:
             logger.info(f'Client {self.cid}: updating parameters with received gradients...')
-            if ENABLE_PROFILER:
-                self.prf.download(parameters, parameters, not_in_test=True)
-                print(f'trian: {self.prf.get_num_download_bytes()}, test: {self.prf.get_num_download_bytes(test_phase=True)}')
-                self.prf.tic()
+            # if ENABLE_PROFILER:
+            #     self.prf.download(parameters, parameters, not_in_test=True)
+            #     self.prf.tic()
             # need changes
             for idx, party_type in enumerate(INDEX_TO_TYPE):
                 grad = self.type2pp_grads[party_type]
@@ -95,12 +94,12 @@ class TrainActiveParty(TrainClientTemplate):
                 grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]
                 grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
                 self.type2pp_grads[party_type] = grad
-            if ENABLE_PROFILER:
-                self.prf.toc(not_in_test=True)
+            # if ENABLE_PROFILER:
+            #     self.prf.toc(not_in_test=True)
 
             for party_type, grad in self.type2pp_grads.items():
-                if ENABLE_PROFILER:
-                    self.prf.tic()
+                # if ENABLE_PROFILER:
+                #     self.prf.tic()
                 # assign gradients
                 grad = torch.tensor(grad, dtype=torch.float)
                 pp_lm = self.pp_lm_dict[party_type]
@@ -110,14 +109,14 @@ class TrainActiveParty(TrainClientTemplate):
                     given_grad = grad[:_size].view(param.shape)
                     grad = grad[_size:]
                     param.grad = given_grad
-                if ENABLE_PROFILER:
-                    self.prf.toc(is_overhead=False, not_in_test=True)
-                    self.prf.tic()
+                # if ENABLE_PROFILER:
+                #     self.prf.toc(is_overhead=False, not_in_test=True)
+                #     self.prf.tic()
                 # update passive parties' local module
                 optimiser.step()
                 optimiser.zero_grad()
-                if ENABLE_PROFILER:
-                    self.prf.toc(is_overhead=False, not_in_test=True)
+                # if ENABLE_PROFILER:
+                #     self.prf.toc(is_overhead=False, not_in_test=True)
             if 'stop' in config:
                 torch.save(self.ap_lm, ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
                 for party_type, pp_lm in self.pp_lm_dict.items():
@@ -157,7 +156,7 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.upload([masked_wx, labels], [masked_wx, labels])
-            self.prf.upload(concatenated_parameters, concatenated_parameters, not_in_test=True)
+            # self.prf.upload(concatenated_parameters, concatenated_parameters, not_in_test=True)
             org_ret_dict = {t: [] for t in INDEX_TO_TYPE}
             for cids, sample_id in ids:
                 for cid in cids:
