@@ -2,6 +2,7 @@ import numpy as np
 import random
 from phe import paillier
 import time
+import pickle
 
 
 class Timer:
@@ -76,20 +77,31 @@ def simulate_secure_aggregation(mat_a, mat_b, num_parties=5):
 
 
 if __name__ == "__main__":
-
-    public_key, secret_key = paillier.generate_paillier_keypair()
-
-    for batch_size in [1, 2, 4, 8, 16, 32, 64]:
-        print(f'batch size {batch_size}:')
-        matrix_a = np.random.randint(low=0, high=8, size=(batch_size, 8))
-        matrix_b = np.random.randint(low=0, high=8, size=(8, 8))
-        timer.tic()
-        result = paillier_matrix_multiply(matrix_a.tolist(), matrix_b.tolist(), public_key, secret_key)
-        tr = timer.toc()
-        print(f'\tHE cpu_time = {tr}')
-        total_time = 0
-        for _ in range(1000):
+    results_list = []
+    for idx in range(10):
+        res = {}
+        results_list += [res]
+        print(f'Experiment {idx + 1}:')
+        public_key, secret_key = paillier.generate_paillier_keypair()
+        for batch_size in [1, 2, 4, 8, 16, 32, 64]:
+            print(f'Running HE with batch size {batch_size}...')
+            matrix_a = np.random.randint(low=1, high=9, size=(batch_size, 8))
+            matrix_b = np.random.randint(low=1, high=9, size=(8, 8))
             timer.tic()
-            simulate_secure_aggregation(matrix_a, matrix_b)
-            total_time += timer.toc()
-        print(f'\tSA cpu_time = {total_time / 1000}\n')
+            result = paillier_matrix_multiply(matrix_a.tolist(), matrix_b.tolist(), public_key, secret_key)
+            he_time = timer.toc()
+            # print(f'\tHE cpu_time = {he_time}')
+            total_time = 0
+            print(f'Running SA with batch size {batch_size}...')
+            for _ in range(1000):
+                timer.tic()
+                simulate_secure_aggregation(matrix_a, matrix_b)
+                total_time += timer.toc()
+            sa_time = total_time / 1000
+            # print(f'\tSA cpu_time = {sa_time}\n')
+            res[batch_size] = (he_time, sa_time)
+        print(f'')
+    pth = 'temp_exp_results.pkl'
+    print(f'Writing results to {pth}')
+    with open(pth, 'wb') as f:
+        pickle.dump(results_list, f)
