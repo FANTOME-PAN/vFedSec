@@ -61,3 +61,14 @@ class ExampleGlobalModule(nn.Module):
         out = F.relu(x)
         out = self.fc(out)
         return out
+
+class MyRNN(nn.Module):
+    def __init__(self):
+        super(MyRNN, self).__init__()
+        self.rnn = nn.GRU(input_size = 1, hidden_size = 16, num_layers = 1, batch_first = True, dropout = 0)
+        self.fc = nn.Linear(in_features = 16, out_features = 5)
+
+    def forward(self, x):
+        x, _ = self.rnn(x)
+        x = self.fc(x[:,-1,:])
+        return x
