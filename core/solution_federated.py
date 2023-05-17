@@ -141,6 +141,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         if (n_failures := len(failures)) > 0:
             logger.error(f"Had {n_failures} failures in round {server_round}")
+            print("failures:", failures)
             raise Exception(f"Had {n_failures} failures in round {server_round}")
         # rnd 1
         # gather all public keys, and forward them to corresponding client
