@@ -70,9 +70,9 @@ def get_sample_selector(df: pd.DataFrame) -> ISampleSelector:
     return ExampleSampleSelector(df)
 
 
-categorical_columns = {'Diastolic-blood-pressure', 'Mean-blood-pressure', 'Systolic-blood-pressure',
-                       'Heart-Rate','Oxygen-saturation', 'Respiratory-rate'}
-target_column = 'y_true'
+categorical_columns = {'job', 'marital', 'education', 'default', 'housing',
+                       'loan', 'contact', 'day', 'month', 'poutcome', 'y'}
+target_column = 'y'
 
 
 class ExampleDataLoader(IDataLoader):
@@ -119,7 +119,7 @@ class ExampleDataLoader(IDataLoader):
             if col in self.cat_cols:
                 # subtract min value from the array, in case some categorical values do not start from 0.
                 d_min, d_max = df[col].values.min(), df[col].values.max()
-                data += [F.one_hot((torch.tensor(df[col].values) - d_min).to(torch.int64), int(d_max - d_min + 1))]
+                data += [F.one_hot(torch.tensor(df[col].values) - d_min, d_max - d_min + 1)]
             else:
                 data += [torch.tensor(df[col].values).view(-1, 1)]
         data += [torch.tensor(df[target_column].values).view(-1, 1)]
@@ -154,7 +154,7 @@ class ExampleSampleSelector(ISampleSelector):
             if col == 'ID':
                 continue
             if col in cat_cols:
-                data += [F.one_hot(torch.tensor(df[col].values).to(torch.int64), int(df[col].values.max() + 1))]
+                data += [F.one_hot(torch.tensor(df[col].values), df[col].values.max() + 1)]
             else:
                 data += [torch.tensor(df[col].values).view(-1, 1)]
         self.data = torch.cat(data, dim=1).float()

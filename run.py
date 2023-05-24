@@ -51,7 +51,7 @@ def get_device() -> str:
 
 def run_demo():
     client_resources = {
-        "num_gpus": 1
+        "num_gpus": 0
     }
 
     strategy = train_strategy_factory(Path('./'))[0]
