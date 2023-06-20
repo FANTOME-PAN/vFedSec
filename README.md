@@ -1,4 +1,4 @@
-# PETs FL solution on tabular data
+# vFedSec demo on tabular data
 The repo currently has example code for the bank marketing dataset
 and can be extended to other tabular datasets via the following steps.
 
