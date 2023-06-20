@@ -39,8 +39,9 @@ class TrainClientTemplate(fl.client.NumPyClient):
             self.prf: IProfiler = get_profiler()
             self.total_prf = get_profiler()
             self.shared_secret_dict = {}
-            self.shared_seed_dict = {}
-            self.secret_key_dict = {}
+            self.fwd_rng_dict = {}
+            self.bwd_rng_dict = {}
+            self.secret_key = b''
             self.rnd_cnt = 0
             self.stage = -1
             self.partial_grad = np.array(0)
@@ -80,13 +81,9 @@ class TrainClientTemplate(fl.client.NumPyClient):
             logger.info(f'client {self.cid}: generating key pairs')
             if ENABLE_PROFILER:
                 self.prf.tic()
-            for cid in config:
-                if cid == self.cid:
-                    continue
-                sk, pk = generate_key_pairs()
-                self.secret_key_dict[cid] = private_key_to_bytes(sk)
-                config[cid] = public_key_to_bytes(pk)
-            config.pop(self.cid)
+            sk, pk = generate_key_pairs()
+            self.secret_key = private_key_to_bytes(sk)
+            config['pk'] = public_key_to_bytes(pk)
             t = ([], 0, config)
             if ENABLE_PROFILER:
                 self.prf.toc()
@@ -104,26 +101,27 @@ class TrainClientTemplate(fl.client.NumPyClient):
                 logger.info(f'client {self.cid}: receiving public keys from {str(config.keys())}')
             else:
                 logger.info(f'client {self.cid}: receiving public keys, sized {sys.getsizeof(config)}')
-            # logger.info(f'client {self.cid}: keys of secret key dict {str(self.secret_key_dict.keys())}')
             if ENABLE_PROFILER:
                 self.prf.download(config)
                 self.prf.tic()
+            sk = bytes_to_private_key(self.secret_key)
             for cid, pk_bytes in config.items():
-                sk = bytes_to_private_key(self.secret_key_dict[cid])
+                if cid == self.cid:
+                    continue
                 pk = bytes_to_public_key(pk_bytes)
                 shared_key = generate_shared_key(sk, pk)
                 self.shared_secret_dict[cid] = shared_key
-                seed32 = 0
-                for i in range(0, len(shared_key), 4):
-                    seed32 ^= int.from_bytes(shared_key[i:i + 4], 'little')
-                self.shared_seed_dict[cid] = np.array(seed32, dtype=np.int32)
+                seed_fwd, seed_bwd = 0, 0
+                for i in range(0, len(shared_key) >> 1, 4):
+                    seed_fwd ^= int.from_bytes(shared_key[i:i + 4], 'little')
+                for i in range(i + 4, len(shared_key), 4):
+                    seed_bwd ^= int.from_bytes(shared_key[i:i + 4], 'little')
+                self.fwd_rng_dict[cid] = np.random.RandomState(seed_fwd)
+                self.bwd_rng_dict[cid] = np.random.RandomState(seed_bwd)
             if ENABLE_PROFILER:
                 self.prf.toc()
-            if DEBUG:
-                logger.info(f'client {self.cid}: shared seed {str(self.shared_seed_dict)}')
             t = ([], 0, {})
             self.setup_round2(parameters, config, t)
-            self.secret_key_dict = {}
             return t
 
     def setup_round1(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
@@ -145,14 +143,10 @@ class TrainClientTemplate(fl.client.NumPyClient):
         return self.__dict__
 
     def cache(self):
-        # for k, v in vars(self).items():
-        #     logger.info(f"client {self.cid}: saving {k}")
-        #     torch.save(v, self.cache_pth)
         if not self.client_dir.exists():
             os.makedirs(self.client_dir)
         with open(self.cache_pth, 'wb') as f:
             pickle.dump(self.get_vars(), f)
-        # torch.save(vars(self), self.cache_pth)
 
     def reload(self):
         if self.cache_pth.exists():
@@ -160,7 +154,6 @@ class TrainClientTemplate(fl.client.NumPyClient):
             with open(self.cache_pth, 'rb') as f:
                 self.__dict__.update(pickle.load(f))
             return True
-            # self.__dict__.update(torch.load(self.cache_pth))
         return False
 
     def __execute(self, parameters: List[np.ndarray], config: Dict[str, Scalar]) \

@@ -1,5 +1,6 @@
 """Debug mode"""
 DEBUG = False
+VALIDATION = False
 
 
 """Vertical FL settings"""

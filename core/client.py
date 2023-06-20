@@ -11,21 +11,16 @@ from torch import nn, optim
 
 from core.client_template import TrainClientTemplate
 from core.secagg import quantize, reverse_quantize, encrypt, decrypt
-from core.utils import pyobj2bytes, bytes2pyobj, pack_local_modules, unpack_local_modules
+from core.utils import pyobj2bytes, bytes2pyobj, pack_local_modules
 from data_loaders import get_data_loader, get_sample_selector, IDataLoader, ISampleSelector
 from models import generate_active_party_local_module, generate_passive_party_local_module
 from settings import *
 
 
-def masking(seed_offset, x: np.ndarray, cid, shared_seed_dict: Dict, target_range=(1 << 32)) \
-        -> np.ndarray:
-    for other_cid, seed in shared_seed_dict.items():
-        np.random.seed(seed + seed_offset)
-        msk = np.random.randint(0, target_range, x.shape, dtype=np.int64)
-        if cid < other_cid:
-            x += msk
-        else:
-            x -= msk
+def rng_masking(x: np.ndarray, cid, rng_dict: Dict[str, np.random.RandomState], target_range=(1 << 32)) -> np.ndarray:
+    for other_cid, rng in rng_dict.items():
+        sign = 1 if cid < other_cid else -1
+        x += sign * rng.randint(0, target_range, x.shape, dtype=np.int64)
     return x
 
 
@@ -54,20 +49,19 @@ class TrainActiveParty(TrainClientTemplate):
             self.pp_lm_dict: Dict[str, nn.Module] = {t: generate_passive_party_local_module(t)
                                                      for t in INDEX_TO_TYPE}
             self.ap_optimiser = optim.SGD(self.ap_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
-            # self.pp_optimiser = optim.SGD(self.pp_lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
             self.pp_optimisers = {t: optim.SGD(lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
                                   for t, lm in self.pp_lm_dict.items()}
             self.loader: IDataLoader = None
             self.type2pp_grads: Dict[str, np.ndarray] = {key: np.array(0) for key in PASSIVE_PARTY_CIDs.keys()}
             self.data = np.array(0)
             self.recv_grad = np.array(0)
-            # self.pp_lm_size = sum([o.numel() for o in self.pp_lm.parameters()])
             self.pp_lm_sizes = {t: sum([o.numel() for o in lm.parameters()]) for t, lm in self.pp_lm_dict.items()}
 
     def setup_round2(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
         # load data
         if ENABLE_PROFILER:
             self.prf.tic()
+        self.bwd_rng_dict = {}
         logger.info(f"Client {self.cid}: preprocessing data")
         range_dict = dict([bytes2pyobj(b) for b in parameters[0]])
         df = pd.read_csv(self.df_pth)
@@ -84,24 +78,22 @@ class TrainActiveParty(TrainClientTemplate):
         # skip the first stage 0
         if server_rnd > 3:
             logger.info(f'Client {self.cid}: updating parameters with received gradients...')
-            # if ENABLE_PROFILER:
-            #     self.prf.download(parameters, parameters, not_in_test=True)
-            #     self.prf.tic()
-            # need changes
             for idx, party_type in enumerate(INDEX_TO_TYPE):
                 grad = self.type2pp_grads[party_type]
                 grad = (grad + parameters[idx]) & 0xffffffff
                 grad = reverse_quantize([grad], CLIP_RANGE, TARGET_RANGE)[0]
-                grad -= (len(self.shared_seed_dict) - 1) * CLIP_RANGE
+                grad -= (len(PASSIVE_PARTY_CIDs[party_type]) - 1) * CLIP_RANGE
                 self.type2pp_grads[party_type] = grad
-            # if ENABLE_PROFILER:
-            #     self.prf.toc(not_in_test=True)
 
             for party_type, grad in self.type2pp_grads.items():
-                # if ENABLE_PROFILER:
-                #     self.prf.tic()
                 # assign gradients
+                if VALIDATION:
+                    logger.info(f"VALIDATION GRAD: {grad[:10]}")
+                    continue
                 grad = torch.tensor(grad, dtype=torch.float)
+                if VALIDATION:
+                    logger.info(f"VALIDATION GRAD: {grad[:10]}")
+                    continue
                 pp_lm = self.pp_lm_dict[party_type]
                 optimiser = self.pp_optimisers[party_type]
                 for param in pp_lm.parameters():
@@ -109,19 +101,13 @@ class TrainActiveParty(TrainClientTemplate):
                     given_grad = grad[:_size].view(param.shape)
                     grad = grad[_size:]
                     param.grad = given_grad
-                # if ENABLE_PROFILER:
-                #     self.prf.toc(is_overhead=False, not_in_test=True)
-                #     self.prf.tic()
                 # update passive parties' local module
                 optimiser.step()
                 optimiser.zero_grad()
-                # if ENABLE_PROFILER:
-                #     self.prf.toc(is_overhead=False, not_in_test=True)
             if 'stop' in config:
                 torch.save(self.ap_lm, ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
                 for party_type, pp_lm in self.pp_lm_dict.items():
                     torch.save(pp_lm, PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH_FORMAT % party_type)
-                # torch.save(self.pp_lm, PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH)
                 return [], 0, {}
 
         logger.info('swift client: preparing batch and masked vectors...')
@@ -133,12 +119,12 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.tic()
-        wx = quantize([self.intermediate_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
-        masked_wx = masking(server_rnd + 1, wx, self.cid, self.shared_seed_dict)
+        wx = self.intermediate_output.detach().numpy()
+        if VALIDATION:
+            wx = np.zeros_like(wx)
+        wx = quantize([wx], CLIP_RANGE, TARGET_RANGE)[0]
+        masked_wx = rng_masking(wx, self.cid, self.fwd_rng_dict)
         ret_dict = {t: [] for t in INDEX_TO_TYPE}
-        # for i, (sample_holder_cid, sample_id) in enumerate(ids):
-        #     key = self.shared_secret_dict[sample_holder_cid]
-        #     ret_dict[str(i)] = encrypt(key, sample_id.encode('ascii'))
         for cids, sample_id in ids:
             for cid in cids:
                 if ENABLE_PROFILER:
@@ -156,7 +142,6 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.upload([masked_wx, labels], [masked_wx, labels])
-            # self.prf.upload(concatenated_parameters, concatenated_parameters, not_in_test=True)
             org_ret_dict = {t: [] for t in INDEX_TO_TYPE}
             for cids, sample_id in ids:
                 for cid in cids:
@@ -172,12 +157,10 @@ class TrainActiveParty(TrainClientTemplate):
             self.prf.tic()
         self.recv_grad = torch.tensor(parameters[0])
         for party_type in self.type2pp_grads.keys():
-            self.type2pp_grads[party_type] = masking(server_rnd, np.zeros(self.pp_lm_sizes[party_type], dtype=int),
-                                                     self.cid, self.shared_seed_dict)
+            self.type2pp_grads[party_type] = np.zeros(self.pp_lm_sizes[party_type], dtype=int)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
             self.prf.tic()
-        # self.partial_grad = masking(server_rnd, np.zeros(self.pp_lm_size, dtype=int), self.cid, self.shared_seed_dict)
         # update Active Party's local module
         self.intermediate_output.backward(self.recv_grad)
         self.ap_optimiser.step()
@@ -218,6 +201,10 @@ class TrainPassiveParty(TrainClientTemplate):
             self.prf.upload(t[0][-1], t[0][-1])
         if DEBUG:
             logger.info(f'client {self.cid}: upload bank list of size {len(t[0][0]) - 1}')
+
+    def setup_round2(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
+        self.bwd_rng_dict = {cid: rng for cid, rng in self.bwd_rng_dict.items()
+                             if cid in PASSIVE_PARTY_CIDs[self.party_type]}
 
     def stage1(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         logger.info(f"Client {self.cid}: reading encrypted batch and computing masked results...")
@@ -265,8 +252,11 @@ class TrainPassiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.tic()
+        if VALIDATION:
+            expanded_output = torch.zeros_like(expanded_output)
         expanded_output = quantize([expanded_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
-        masked_ret = masking(server_rnd, expanded_output, self.cid, self.shared_seed_dict)
+        # masked_ret = masking(server_rnd, expanded_output, self.cid, self.shared_seed_dict)
+        masked_ret = rng_masking(expanded_output, self.cid, self.fwd_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc()
             self.prf.upload(masked_ret, expanded_output)
@@ -290,14 +280,13 @@ class TrainPassiveParty(TrainClientTemplate):
             self.lm.zero_grad()
         else:
             self.partial_grad = np.zeros(self.lm_size)
+        if VALIDATION:
+            self.partial_grad = np.zeros_like(self.partial_grad)
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False, not_in_test=True)
             self.prf.tic()
-        # reshape beta to B x 1 from B, then expand it to B x 26
-        # do element-wise production between expanded beta and cached_flags (dim: B x 26)
-        # finally, sum up along axis 0, get results of dim 26, i.e., the partial agg_grad on this client
         self.partial_grad = quantize([self.partial_grad], CLIP_RANGE, TARGET_RANGE)[0]
-        masked_partial_grad = masking(server_rnd, self.partial_grad, self.cid, self.shared_seed_dict)
+        masked_partial_grad = rng_masking(self.partial_grad, self.cid, self.bwd_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
             self.prf.upload(masked_partial_grad, masked_partial_grad, not_in_test=True)

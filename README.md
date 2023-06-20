@@ -40,3 +40,16 @@ Just run it. The log will be found in `logs` folder.
 
 #### In case of potential conflicts, please avoid modifying files in `core` folder.
 
+
+## Reference
+
+```bibtex
+@misc{qiu2023vfedsec,
+      title={vFedSec: Efficient Secure Aggregation for Vertical Federated Learning via Secure Layer}, 
+      author={Xinchi Qiu and Heng Pan and Wanru Zhao and Chenyang Ma and Pedro P. B. Gusmao and Nicholas D. Lane},
+      year={2023},
+      eprint={2305.16794},
+      archivePrefix={arXiv},
+      primaryClass={cs.CR}
+}
+```
