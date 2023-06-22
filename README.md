@@ -43,7 +43,7 @@ Just run it. The log will be found in `logs` folder.
 
 
 ## Reference
-[Paper link](https://arxiv.org/abs/2305.16794)
+Paper can be found here: [Paper link](https://arxiv.org/abs/2305.16794)
 
 ```bibtex
 @misc{qiu2023vfedsec,
