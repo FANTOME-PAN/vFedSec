@@ -1,4 +1,5 @@
-# vFedSec demo on tabular data
+# vFedSec: Efficient Secure Aggregation for Vertical Federated Learning via Secure Layer
+# demo on tabular data
 The repo currently has example code for the bank marketing dataset
 and can be extended to other tabular datasets via the following steps.
 
@@ -42,6 +43,7 @@ Just run it. The log will be found in `logs` folder.
 
 
 ## Reference
+[Paper link](https://arxiv.org/abs/2305.16794)
 
 ```bibtex
 @misc{qiu2023vfedsec,
