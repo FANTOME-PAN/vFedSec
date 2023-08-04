@@ -93,28 +93,45 @@ def train(net, num_epochs, trainloader, testloader, criterion, optimizer):
 if __name__ =='__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
-    #net = FashionCNN() # default, not for vfl network
-    #net = CNN1() #1 CNN then linear layers
-    #net = MLP() # only linear layers
-    #net = CNN2() # 2 CNN then linear layers, second CNN need to change the kernel size to 1
-    #net = CNN_and_CNN() # 1 CNN locally, NO linear layer in between, then CNN globally
-    net = CNN_linear_CNN() # 1 CNN locally, then liner layer, then CNN globally
+    dataset = 'emnist' #emnist or fashion_mnist
+    
+    
+    if dataset == 'fashion_mnist':
+        num_classes = 10
+    else:
+        num_classes = 47
+    num_epochs = 5 #fixed
+    learning_rate = 0.1 #fixed
+
+    #############
+    net = CentralisedCNN(num_classes=num_classes) # default, not for vfl network
+    #net = MLP(num_classes=num_classes) # only linear layers
+    #net = CNN1(num_classes=num_classes) #1 CNN then linear layers
+    #net = CNN2(num_classes=num_classes) # 2 CNN then linear layers, second CNN need to change the kernel size to 1
+    #net = CNN_and_CNN(num_classes=num_classes) # 1 CNN locally, NO linear layer in between, then CNN globally
+    #net = CNN_linear_CNN(num_classes=num_classes) # 1 CNN locally, then liner layer, then CNN globally
     
     net.to(device)
-    train_set = torchvision.datasets.FashionMNIST("./data", download=True, transform=
+    if dataset == 'fashion_mnist':
+        train_set = torchvision.datasets.FashionMNIST("./data", download=True, transform=
                                                 transforms.Compose([transforms.ToTensor()]))
-    test_set = torchvision.datasets.FashionMNIST("./data", download=True, train=False, transform=
+        test_set = torchvision.datasets.FashionMNIST("./data", download=True, train=False, transform=
                                                transforms.Compose([transforms.ToTensor()]))  
 
+    else:
+        train_set = torchvision.datasets.EMNIST("./data", split = 'balanced', download=True, transform=
+                                                transforms.Compose([transforms.ToTensor()]))
+        test_set = torchvision.datasets.EMNIST("./data", split = 'balanced', download=True, train=False, transform=
+                                               transforms.Compose([transforms.ToTensor()]))  
+    
+    
     trainloader = torch.utils.data.DataLoader(train_set, batch_size=100)
     testloader = torch.utils.data.DataLoader(test_set,batch_size=100)
 
 
     criterion = nn.CrossEntropyLoss()
-    learning_rate = 0.001
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    #optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate)
     print(net)
-
-    num_epochs = 10
     
     train(net, num_epochs, trainloader, testloader, criterion, optimizer)

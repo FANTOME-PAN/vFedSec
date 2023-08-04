@@ -9,11 +9,12 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import confusion_matrix
 
-class FashionCNN(nn.Module):
+class CentralisedCNN(nn.Module):
     # Default network
-    def __init__(self):
-        super(FashionCNN, self).__init__()
+    def __init__(self, num_classes):
+        super(CentralisedCNN, self).__init__()
         
+        self.num_classes = num_classes
         self.layer1 = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
@@ -22,24 +23,25 @@ class FashionCNN(nn.Module):
         )
         
         self.layer2 = nn.Sequential(
-            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(2)
         )
         
-        self.fc1 = nn.Linear(in_features=64*6*6, out_features=600)
+        self.fc1 = nn.Linear(in_features=64*7*7, out_features=600)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=600, out_features=120)
-        self.fc3 = nn.Linear(in_features=120, out_features=10)
+        self.fc3 = nn.Linear(in_features=120, out_features=self.num_classes)
         
     def forward(self, x):
         out = self.layer1(x)
         out = self.layer2(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc1(out)
-        out = self.drop(out)
-        out = self.fc2(out)
+        out = torch.flatten(out, 1)
+        #out = out.view(out.size(0), -1)
+        out = F.relu(self.fc1(out))
+        #out = self.drop(out)
+        out = F.relu(self.fc2(out))
         out = self.fc3(out)
         
         return out
@@ -47,7 +49,7 @@ class FashionCNN(nn.Module):
 
 class CNN1(nn.Module):
     
-    def __init__(self):
+    def __init__(self, num_classes):
         super(CNN1, self).__init__()
         
         self.layer1 = nn.Sequential(
@@ -67,7 +69,7 @@ class CNN1(nn.Module):
         self.fc1 = nn.Linear(in_features=128*3*14, out_features=600)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=600, out_features=120)
-        self.fc3 = nn.Linear(in_features=120, out_features=10)
+        self.fc3 = nn.Linear(in_features=120, out_features=num_classes)
         
     def forward(self, x):
         # also 4 clients, 
@@ -82,9 +84,9 @@ class CNN1(nn.Module):
         #out = out.view(out.size(0), -1)
         out = torch.cat(out_temp,dim=1)
         out = out.view(x_single.size()[0], -1)
-        out = self.fc1(out)
-        out = self.drop(out)
-        out = self.fc2(out)
+        out = F.relu(self.fc1(out))
+        #out = self.drop(out)
+        out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
     
@@ -94,7 +96,7 @@ class MLP(nn.Module):
     # 7 layer of CNN and then fully connected layers
     # since fully connect layer, where to cut won't make any difference
     
-    def __init__(self):
+    def __init__(self, num_classes):
         super(MLP, self).__init__()
         
         # fc1 is the local module, so the infeatures for fc2 will be 64*4
@@ -104,7 +106,7 @@ class MLP(nn.Module):
         self.fc3 = nn.Linear(in_features=128, out_features=256)
         self.fc4 = nn.Linear(in_features=256, out_features=128)
         self.fc5 = nn.Linear(in_features=128, out_features=64)
-        self.fc6 = nn.Linear(in_features=64, out_features=10)
+        self.fc6 = nn.Linear(in_features=64, out_features=num_classes)
         
     def forward(self, x):
         # divided input into 4 clients
@@ -125,7 +127,7 @@ class MLP(nn.Module):
 
 class CNN2(nn.Module):
     
-    def __init__(self):
+    def __init__(self, num_classes):
         super(CNN2, self).__init__()
         
         self.layer1 = nn.Sequential(
@@ -145,7 +147,7 @@ class CNN2(nn.Module):
         self.fc1 = nn.Linear(in_features=1792, out_features=600)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=600, out_features=120)
-        self.fc3 = nn.Linear(in_features=120, out_features=10)
+        self.fc3 = nn.Linear(in_features=120, out_features=num_classes)
         
     def forward(self, x):
         # also 4 clients, 
@@ -160,14 +162,14 @@ class CNN2(nn.Module):
         #out = out.view(out.size(0), -1)
         out = torch.cat(out_temp,dim=1)
         out = out.view(x_single.size()[0], -1)
-        out = self.fc1(out)
-        out = self.drop(out)
-        out = self.fc2(out)
+        out = F.relu(self.fc1(out))
+        #out = self.drop(out)
+        out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
     
 class CNN_and_CNN(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes):
         super(CNN_and_CNN, self).__init__()
         
         self.layer1 = nn.Sequential(
@@ -188,32 +190,29 @@ class CNN_and_CNN(nn.Module):
         self.fc1 = nn.Linear(in_features=448, out_features=256)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=256, out_features=120)
-        self.fc3 = nn.Linear(in_features=120, out_features=10)
+        self.fc3 = nn.Linear(in_features=120, out_features= num_classes)
         
     def forward(self, x):
         # also 4 client
         # one CNN locally, NO linear layer, then CNN globally
-        
         out_temp = []
         x_split = torch.split(x,7,dim=2)
         for x_single in x_split:
             out0 = self.layer1(x_single)
             out_temp.append(out0)
-
         out = torch.cat(out_temp,dim=1)
         # here need to add a linear layer
-        import pdb;pdb.set_trace()
 
         out = self.layer2(out)
         out = out.view(x_single.size()[0], -1)
-        out = self.fc1(out)
-        out = self.drop(out)
-        out = self.fc2(out)
+        out = F.relu(self.fc1(out))
+        #out = self.drop(out)
+        out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
 
 class CNN_linear_CNN(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes):
         super(CNN_linear_CNN, self).__init__()
         
         self.layer1 = nn.Sequential(
@@ -234,7 +233,7 @@ class CNN_linear_CNN(nn.Module):
         self.fc1 = nn.Linear(in_features=512*2, out_features=256)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=256, out_features=120)
-        self.fc3 = nn.Linear(in_features=120, out_features=10)
+        self.fc3 = nn.Linear(in_features=120, out_features= num_classes)
         
     def forward(self, x):
         # also 4 client
@@ -254,9 +253,9 @@ class CNN_linear_CNN(nn.Module):
         # then doing another CNN layer
         out = self.layer2(out)
         out = out.view(x_single.size()[0], -1)
-        out = self.fc1(out)
-        out = self.drop(out)
-        out = self.fc2(out)
+        out = F.relu(self.fc1(out))
+        #out = self.drop(out)
+        out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
 
