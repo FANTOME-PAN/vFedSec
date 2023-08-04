@@ -223,14 +223,14 @@ class CNN_linear_CNN(nn.Module):
         )
         
         self.layer2 = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=1),
+            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(2)
         )
         
-        self.fc0 = nn.Linear(in_features=128*3*14, out_features=64)
-        self.fc1 = nn.Linear(in_features=512*2, out_features=256)
+        self.fc0 = nn.Linear(in_features=128*3*14, out_features=128*3*14)#128x3x14
+        self.fc1 = nn.Linear(in_features=448, out_features=256)
         self.drop = nn.Dropout2d(0.25)
         self.fc2 = nn.Linear(in_features=256, out_features=120)
         self.fc3 = nn.Linear(in_features=120, out_features= num_classes)
@@ -249,7 +249,7 @@ class CNN_linear_CNN(nn.Module):
 
         # here need to add a linear layer
         out = self.fc0(out)
-        out = torch.reshape(out, (out.size(0), 1, 8, 8))
+        out = torch.reshape(out, (out.size(0), 128, 3, 14))
         # then doing another CNN layer
         out = self.layer2(out)
         out = out.view(x_single.size()[0], -1)

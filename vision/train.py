@@ -9,27 +9,10 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import confusion_matrix
 
-#from data import *
 from model import *
 
-def output_label(label):
-    output_mapping = {
-                 0: "T-shirt/Top",
-                 1: "Trouser",
-                 2: "Pullover",
-                 3: "Dress",
-                 4: "Coat", 
-                 5: "Sandal", 
-                 6: "Shirt",
-                 7: "Sneaker",
-                 8: "Bag",
-                 9: "Ankle Boot"
-                 }
-    input = (label.item() if type(label) == torch.Tensor else label)
-    return output_mapping[input]
 
-
-def test(net, testloader):
+def test(net, testloader, device):
     total = 0
     correct = 0
 
@@ -37,7 +20,7 @@ def test(net, testloader):
         images, labels = images.to(device), labels.to(device)
         #labels_list.append(labels)
     
-        test = Variable(images.view(100, 1, 28, 28))
+        test = Variable(images.view(images.size(0), 1, 28, 28))
     
         outputs = net(test)
     
@@ -50,24 +33,15 @@ def test(net, testloader):
     accuracy = correct * 100 / total
     return accuracy
 
-def train(net, num_epochs, trainloader, testloader, criterion, optimizer):
-    count = 0
-    # Lists for visualization of loss and accuracy 
-    loss_list = []
-    iteration_list = []
-    accuracy_list = []
-
-    # Lists for knowing classwise accuracy
-    predictions_list = []
-    labels_list = []
+def train(net, num_epochs, trainloader, testloader, criterion, optimizer, device):
 
     for epoch in range(num_epochs):
     
         for images, labels in trainloader:
             # Transfering images and labels to GPU if available
             images, labels = images.to(device), labels.to(device)
-        
-            train = Variable(images.view(100, 1, 28, 28))
+            
+            train = Variable(images.view(images.size(0), 1, 28, 28))
             labels = Variable(labels)
             
             # Forward pass 
@@ -83,10 +57,9 @@ def train(net, num_epochs, trainloader, testloader, criterion, optimizer):
             # Optimizing the parameters
             optimizer.step()
         
-            count += 1
 
         # Testing the model
-        acc = test(net, testloader)
+        acc = test(net, testloader, device)
         print(f'test acc at epoch {epoch} is acc = {acc}')    
             
 
@@ -100,13 +73,12 @@ if __name__ =='__main__':
         num_classes = 10
     else:
         num_classes = 47
-    num_epochs = 5 #fixed
+    num_epochs = 10 #fixed
     learning_rate = 0.1 #fixed
 
     #############
-    net = CentralisedCNN(num_classes=num_classes) # default, not for vfl network
-    #net = MLP(num_classes=num_classes) # only linear layers
-    #net = CNN1(num_classes=num_classes) #1 CNN then linear layers
+    #net = CentralisedCNN(num_classes=num_classes) # default, not for vfl network
+    net = MLP(num_classes=num_classes) # only linear layers
     #net = CNN2(num_classes=num_classes) # 2 CNN then linear layers, second CNN need to change the kernel size to 1
     #net = CNN_and_CNN(num_classes=num_classes) # 1 CNN locally, NO linear layer in between, then CNN globally
     #net = CNN_linear_CNN(num_classes=num_classes) # 1 CNN locally, then liner layer, then CNN globally
@@ -134,4 +106,4 @@ if __name__ =='__main__':
     optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate)
     print(net)
     
-    train(net, num_epochs, trainloader, testloader, criterion, optimizer)
+    train(net, num_epochs, trainloader, testloader, criterion, optimizer, device)
