@@ -9,11 +9,12 @@ from loguru import logger
 
 from core.solution_federated import train_strategy_factory
 from core.client import train_client_factory
-from settings import TRAINING_ROUNDS, CID_TO_DATA_PATH
+from settings import TRAINING_ROUNDS, CID_TO_DATA_PATH, NUM_CLIENTS
+
 
 parameters = {
-    'num_clients_per_round': 5,
-    'num_total_clients': 5,
+    'num_clients_per_round': NUM_CLIENTS,
+    'num_total_clients': NUM_CLIENTS,
     'num_rounds': TRAINING_ROUNDS,
     'data_dir': './client_data'
 }

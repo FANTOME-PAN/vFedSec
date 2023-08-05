@@ -72,4 +72,4 @@ if __name__ == '__main__':
              'campaign', 'pdays', 'previous', 'poutcome', 'y'],
             ['ID', 'default', 'balance'],
             ['ID', 'age', 'job', 'marital', 'education']]
-    partition(df, dir_pth, cols, [2, 2])
+    partition(df, dir_pth, cols, [1, 1])

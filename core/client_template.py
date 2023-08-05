@@ -91,7 +91,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             if DEBUG:
                 logger.info(f'client {self.cid}: replying {str(config.keys())}')
             else:
-                logger.info(f'client {self.cid}: uploading public keys, sized {sys.getsizeof(config)}')
+                logger.info(f'client {self.cid}: uploading public keys, sized {sys.getsizeof(config)}, {config.keys()}')
             self.setup_round1(parameters, config, t)
             return t
         # rnd 2

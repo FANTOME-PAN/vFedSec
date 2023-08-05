@@ -90,7 +90,7 @@ class MySimpleProfiler(IProfiler):
             self.td_download_overhead_bytes += overhead
         return s
 
-    def upload(self, obj, original_obj=None, not_in_test=False):
+    def upload(self, obj, original_obj=None, not_in_test=False, tmp=None):
         original_size = my_getsizeof(original_obj) if original_obj is not None else 0
         s = my_getsizeof(obj)
         if original_size > s:
@@ -101,6 +101,8 @@ class MySimpleProfiler(IProfiler):
         if not_in_test:
             self.td_upload_bytes += s
             self.td_upload_overhead_bytes += overhead
+        if isinstance(tmp, list):
+            tmp.append(overhead)
         return s
 
     def get_cpu_time(self, include_overhead=True, test_phase=False):

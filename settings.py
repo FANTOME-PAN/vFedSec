@@ -10,9 +10,10 @@ VALIDATION = False
 # CIDs of type B passive parties are '3', '4'.
 ACTIVE_PARTY_CID = '0'
 PASSIVE_PARTY_CIDs = {
-    'A': ['1', '2'],
-    'B': ['3', '4'],
+    'A': ['1'],
+    'B': ['2'],
 }
+NUM_CLIENTS = sum(len(v) for v in PASSIVE_PARTY_CIDs.values()) + 1
 
 
 """Training hyper-parameters"""
@@ -24,7 +25,7 @@ BATCH_SIZE = 256
 """Paths"""
 # Please specify the path to the data of each party.
 CID_TO_DATA_PATH = {
-    str(cid): f'data/bank/p{cid}_data.csv' for cid in range(5)
+    str(cid): f'data/bank/p{cid}_data.csv' for cid in range(NUM_CLIENTS)
 }
 ACTIVE_PARTY_LOCAL_MODULE_SAVE_PATH = 'models/active_party_local_module.pth'
 PASSIVE_PARTY_LOCAL_MODULE_SAVE_PATH_FORMAT = 'models/passive_party_local_module_%s.pth'

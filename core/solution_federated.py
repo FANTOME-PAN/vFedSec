@@ -203,19 +203,19 @@ class TrainStrategy(fl.server.strategy.Strategy):
             self.gm_optimizer.step()
             self.gm_optimizer.zero_grad()
         elif self.stage == 2:
-            self.agg_grad = [0 for _ in INDEX_TO_TYPE]
+            self.agg_grad = [np.array(0) for _ in INDEX_TO_TYPE]
             for client, res in results:
                 if client.cid == '0':
                     continue
-                masked_grad = parameters_to_ndarrays(res.parameters)[0]
-                idx = TYPE_TO_INDEX[CID_TO_TYPE[client.cid]]
-                if DEBUG:
-                    logger.info(f'server received {masked_grad}')
-                self.agg_grad[idx] += masked_grad
-                # if self.agg_grad is None:
-                #     self.agg_grad = t[0]
-                # else:
-                #     self.agg_grad += t[0]
+                masked_grad = parameters_to_ndarrays(res.parameters)
+                # A client will not send back gradients iff its passive cluster contains only one client
+                assert (len(masked_grad) == 0) == (len(PASSIVE_PARTY_CIDs[CID_TO_TYPE[client.cid]]) == 1)
+                if len(masked_grad) == 1:
+                    masked_grad = masked_grad[0]
+                    idx = TYPE_TO_INDEX[CID_TO_TYPE[client.cid]]
+                    if DEBUG:
+                        logger.info(f'server received {masked_grad}')
+                    self.agg_grad[idx] = masked_grad + self.agg_grad[idx]
             pass
         else:
             raise AssertionError("Stage number should be 0, 1, or 2")

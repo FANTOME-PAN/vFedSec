@@ -86,6 +86,10 @@ class TrainActiveParty(TrainClientTemplate):
                 self.type2pp_grads[party_type] = grad
 
             for party_type, grad in self.type2pp_grads.items():
+                if len(PASSIVE_PARTY_CIDs[party_type]) == 1:
+                    logger.info(f"Client {self.cid}: skip passive party type {party_type} "
+                                f"- passive cluster contains only one client")
+                    continue
                 # assign gradients
                 if VALIDATION:
                     logger.info(f"VALIDATION GRAD: {grad[:10]}")
@@ -182,7 +186,9 @@ class TrainPassiveParty(TrainClientTemplate):
             self.mask = np.array(0)
             self.selector: ISampleSelector = None
             self.party_type = CID_TO_TYPE[cid]
+            self.singleton_flag = len(PASSIVE_PARTY_CIDs[self.party_type]) == 1
             self.lm = generate_passive_party_local_module(self.party_type)
+            self.optimiser = optim.SGD(self.lm.parameters(), lr=LEARNING_RATE, momentum=0.9)
             self.no_sample_selected = False
             self.output_shape = ()
             self.lm_size = sum([param.numel() for param in self.lm.parameters()])
@@ -198,7 +204,10 @@ class TrainPassiveParty(TrainClientTemplate):
         t[0].append(np.array([pyobj2bytes((self.cid, self.selector.get_range()))]))
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
-            self.prf.upload(t[0][-1], t[0][-1])
+            lst = []
+            self.prf.upload(t[0][-1], t[0][-1], tmp=lst)
+            if lst[0] > 0:
+                logger.warning(f'client {self.cid}: t[0][-1] overhead {lst[0]}')
         if DEBUG:
             logger.info(f'client {self.cid}: upload bank list of size {len(t[0][0]) - 1}')
 
@@ -259,7 +268,10 @@ class TrainPassiveParty(TrainClientTemplate):
         masked_ret = rng_masking(expanded_output, self.cid, self.fwd_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc()
-            self.prf.upload(masked_ret, expanded_output)
+            lst = []
+            self.prf.upload(masked_ret, expanded_output, tmp=lst)
+            if lst[0] > 0:
+                logger.warning(f'client {self.cid}: masked_ret overhead {lst[0]}')
         if DEBUG:
             logger.info(f'client {self.cid}: masking offset = {server_rnd}')
         return [masked_ret], 0, {}
@@ -273,11 +285,16 @@ class TrainPassiveParty(TrainClientTemplate):
         # bank client code
         if not self.no_sample_selected:
             self.intermediate_output.backward(client_grad[self.mask])
-            self.partial_grad = []
-            for param in self.lm.parameters():
-                self.partial_grad += [param.grad.cpu().detach().numpy().flatten()]
-            self.partial_grad = np.concatenate(self.partial_grad)
-            self.lm.zero_grad()
+            # If the passive party only has this client, skip uploading grad and apply updates locally.
+            if self.singleton_flag:
+                self.optimiser.step()
+                self.optimiser.zero_grad()
+            else:
+                self.partial_grad = []
+                for param in self.lm.parameters():
+                    self.partial_grad += [param.grad.cpu().detach().numpy().flatten()]
+                self.partial_grad = np.concatenate(self.partial_grad)
+                self.lm.zero_grad()
         else:
             self.partial_grad = np.zeros(self.lm_size)
         if VALIDATION:
@@ -285,11 +302,13 @@ class TrainPassiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False, not_in_test=True)
             self.prf.tic()
-        self.partial_grad = quantize([self.partial_grad], CLIP_RANGE, TARGET_RANGE)[0]
-        masked_partial_grad = rng_masking(self.partial_grad, self.cid, self.bwd_rng_dict)
+        if not self.singleton_flag:
+            self.partial_grad = quantize([self.partial_grad], CLIP_RANGE, TARGET_RANGE)[0]
+            masked_partial_grad = rng_masking(self.partial_grad, self.cid, self.bwd_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
-            self.prf.upload(masked_partial_grad, masked_partial_grad, not_in_test=True)
+            if not self.singleton_flag:
+                self.prf.upload(masked_partial_grad, masked_partial_grad, not_in_test=True)
         if DEBUG:
             logger.info(f'client {self.cid}: uploading masked grad : {masked_partial_grad}')
         else:
@@ -310,6 +329,8 @@ class TrainPassiveParty(TrainClientTemplate):
                   f'overhead = {self.prf.get_num_upload_bytes(test_phase=True) - self.prf.get_num_upload_bytes(include_overhead=False, test_phase=True)}'
 
             logger.info(f'\n========\nclient {self.cid}:\n{txt}\n========\n')
+        if self.singleton_flag:
+            return [], 0, {}
         return [masked_partial_grad], 0, {}
 
 
