@@ -10,8 +10,9 @@ VALIDATION = False
 # CIDs of type B passive parties are '3', '4'.
 ACTIVE_PARTY_CID = '0'
 PASSIVE_PARTY_CIDs = {
-    'A': ['1', '2'],
-    'B': ['3', '4'],
+    'A': ['1'],
+    'B': ['2'],
+    'C': ['3'],
 }
 NUM_CLIENTS = sum(len(v) for v in PASSIVE_PARTY_CIDs.values()) + 1
 
@@ -19,7 +20,7 @@ NUM_CLIENTS = sum(len(v) for v in PASSIVE_PARTY_CIDs.values()) + 1
 """Training hyper-parameters"""
 NUM_ITERATION = 5  # odd
 LEARNING_RATE = 0.01
-BATCH_SIZE = 256
+BATCH_SIZE = 4
 
 
 """Paths"""

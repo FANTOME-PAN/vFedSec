@@ -4,6 +4,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import torch
+import torchvision
+from torchvision import transforms
 import torch.nn.functional as F
 
 from settings import *
@@ -28,7 +30,7 @@ class IDataLoader(ABC):
         ...
 
     @abstractmethod
-    def next_batch(self) -> Tuple[torch.FloatTensor, List[Tuple[Tuple[str], str]], torch.Tensor]:
+    def next_batch(self) -> Tuple[torch.FloatTensor, List[Tuple[Tuple[str, ...], str]], torch.Tensor]:
         """
         :rtype: Tuple of 3 elements, i.e., the batched data, the list of (client_IDs, sample_ID), and labels;
         client_IDs should be a tuple containing CIDs of all clients holding the given sample.
@@ -62,12 +64,12 @@ class ISampleSelector(ABC):
         ...
 
 
-def get_data_loader(df: pd.DataFrame, range_dict: Dict[str, any]) -> IDataLoader:
-    return ExampleDataLoader(df, range_dict, BATCH_SIZE)
+def get_data_loader() -> IDataLoader:
+    return FashionDataLoader(BATCH_SIZE)
 
 
-def get_sample_selector(df: pd.DataFrame) -> ISampleSelector:
-    return ExampleSampleSelector(df)
+def get_sample_selector(client_id: str) -> ISampleSelector:
+    return FashionSampleSelector(client_id)
 
 
 categorical_columns = {'job', 'marital', 'education', 'default', 'housing',
@@ -75,94 +77,61 @@ categorical_columns = {'job', 'marital', 'education', 'default', 'housing',
 target_column = 'y'
 
 
-class ExampleDataLoader(IDataLoader):
-    def __init__(self, df: pd.DataFrame, range_dict: Dict[str, any], batch_size):
+class FashionDataLoader(IDataLoader):
+    def __init__(self, batch_size):
         self.data: torch.tensor = None
         self.ids: np.ndarray = None
         # self.max_ids = None
         self.type2max_ids: Dict[str, list] = {t: [] for t in INDEX_TO_TYPE}
         self.batch_size = batch_size
-        self.ptr = 0
-        self.pos_idx = np.array(0)
-        self.neg_idx = np.array(0)
-        self.new_idx = None
-        self.cat_cols = categorical_columns.copy()
-        self.set(df, range_dict)
-
-    def id2cid(self, sample_id: str) -> Tuple[str]:
-        nid = int(sample_id[1:])
-        ret = []
-        for t in INDEX_TO_TYPE:
-            max_ids = self.type2max_ids[t]
-            for cid, max_id in max_ids:
-                if nid <= max_id:
-                    ret += [cid]
-                    break
-        if len(ret) == len(INDEX_TO_TYPE):
-            return tuple(ret)
-        raise RuntimeError(f'{sample_id}: Unexpected ID')
-
-    def set(self, df: pd.DataFrame, range_dict: Dict[str, any]):
-        # convert Sample IDs of format 'Nxxxxxx' to integer
-        for cid, o in range_dict.items():
-            max_id = int(o[1][1:])
-            self.type2max_ids[CID_TO_TYPE[cid]].append((cid, max_id))
-        for lst in self.type2max_ids.values():
-            lst.sort(key=lambda x: x[1])
-        # self.max_ids = sorted([(cid, int(o[1][1:])) for cid, o in range_dict.items()], key=lambda x: x[1])
-
-        data: List[torch.Tensor] = []
-        self.cat_cols.intersection_update(df.columns)
-        for col in df.columns:
-            if col in ['ID', target_column]:
-                continue
-            if col in self.cat_cols:
-                # subtract min value from the array, in case some categorical values do not start from 0.
-                d_min, d_max = df[col].values.min(), df[col].values.max()
-                data += [F.one_hot(torch.tensor(df[col].values) - d_min, d_max - d_min + 1)]
-            else:
-                data += [torch.tensor(df[col].values).view(-1, 1)]
-        data += [torch.tensor(df[target_column].values).view(-1, 1)]
-        data = torch.cat(data, dim=1).float()
-        self.ids = df['ID'].values.astype(str)
-        self.data = data
-        self.shuffle()
-
-    def shuffle(self):
-        self.ptr = 0
-        self.new_idx = np.random.permutation(self.ids.shape[0])
+        self.train_set = torchvision.datasets.FashionMNIST(
+            "./data",
+            download=True,
+            transform=transforms.Compose([transforms.ToTensor()])
+        )
+        self.indices = np.random.permutation(len(self.train_set))
+        self.all_pp_ids = tuple(
+            v[0] for v in PASSIVE_PARTY_CIDs.values()
+        )
 
     # return mini-batch, bathed (client_ID, ID), and labels
-    def next_batch(self) -> Tuple[np.ndarray, List[Tuple[str, str]], np.ndarray]:
-        batch_data = self.data[self.new_idx][self.ptr: self.ptr + self.batch_size]
-        batch_label = batch_data[:, -1].view(-1, 1)
-        batch_data = batch_data[:, :-1]
-        batch_ids = self.ids[self.new_idx][self.ptr: self.ptr + self.batch_size]
-        batch_ids = [(self.id2cid(o), o) for o in batch_ids]
-        self.ptr += self.batch_size
-        if self.ptr >= self.ids.shape[0]:
-            self.shuffle()
-        return batch_data, batch_ids, batch_label
+    def next_batch(self) -> Tuple[np.ndarray, List[Tuple[Tuple[str, ...], str]], np.ndarray]:
+        # List of image-class tuples
+        batch: List[Tuple[torch.Tensor, int]] = [
+            self.train_set[i] for i in self.indices[:self.batch_size]
+        ]
+        img = batch[0][0]
+        assert img.shape == (1, 28, 28)
+        # Retrieve images & targets & indices
+        batch_images = torch.stack([img[:, :7, :] for img, _ in batch])
+        batch_targets = torch.tensor([gt for _, gt in batch], dtype=int).view(-1, 1)
+        batch_indices = [(self.all_pp_ids, str(idx)) for idx in self.indices[:self.batch_size]]
+        # Pop used indices
+        self.indices = self.indices[self.batch_size:]
+        # Update indices if end
+        if len(self.indices) < self.batch_size:
+            self.indices = np.random.permutation(len(self.train_set))
+        print(f'send {batch_indices}')
+        return batch_images, batch_indices, batch_targets
 
 
-class ExampleSampleSelector(ISampleSelector):
-    def __init__(self, df: pd.DataFrame):
-        cat_cols = categorical_columns.copy()
-        cat_cols.intersection_update(df.columns)
-        data = []
-        for col in df.columns:
-            if col == 'ID':
-                continue
-            if col in cat_cols:
-                data += [F.one_hot(torch.tensor(df[col].values), df[col].values.max() + 1)]
-            else:
-                data += [torch.tensor(df[col].values).view(-1, 1)]
-        self.data = torch.cat(data, dim=1).float()
-        self.id2idx = dict(zip(df['ID'], df.index))
-        self.min_id, self.max_id = df['ID'].values[0], df['ID'].values[-1]
+class FashionSampleSelector(ISampleSelector):
+    def __init__(self, cid: str):
+        self.train_set = torchvision.datasets.FashionMNIST(
+            "./data",
+            download=True,
+            transform=transforms.Compose([transforms.ToTensor()])
+        )
+        self.cid = cid
 
     def select(self, ids: List[str]):
-        return self.data[torch.tensor([self.id2idx[o] for o in ids], dtype=torch.long)]
+        # List of image-class tuples
+        batch: List[Tuple[torch.Tensor, int]] = [
+            self.train_set[int(i)] for i in ids
+        ]
+        offset = int(self.cid) * 7
+        batch_images = torch.stack([img[:, offset: offset + 7, :] for img, _ in batch])
+        return batch_images
 
     def get_range(self) -> any:
-        return self.min_id, self.max_id
+        return 0

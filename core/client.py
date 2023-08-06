@@ -27,7 +27,7 @@ def rng_masking(x: np.ndarray, cid, rng_dict: Dict[str, np.random.RandomState], 
 def try_decrypt_and_load(key, ciphertext: bytes) -> Union[object, None]:
     try:
         plaintext = decrypt(key, ciphertext)
-        ret = bytes2pyobj(plaintext)
+        ret = plaintext
         return ret
     except:
         return None
@@ -63,16 +63,16 @@ class TrainActiveParty(TrainClientTemplate):
             self.prf.tic()
         self.bwd_rng_dict = {}
         logger.info(f"Client {self.cid}: preprocessing data")
-        range_dict = dict([bytes2pyobj(b) for b in parameters[0]])
-        df = pd.read_csv(self.df_pth)
-        self.loader = get_data_loader(df, range_dict)
+        # range_dict = dict([bytes2pyobj(b) for b in parameters[0]])
+        # df = pd.read_csv(self.df_pth)
+        self.loader = get_data_loader()
         # training code
         if ACTIVE_PARTY_PRETRAINED_MODEL_PATH is not None:
             if Path(ACTIVE_PARTY_PRETRAINED_MODEL_PATH).exists():
                 self.ap_lm.load_state_dict(torch.load(ACTIVE_PARTY_PRETRAINED_MODEL_PATH))
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
-            self.prf.download(range_dict, range_dict)
+            # self.prf.download(range_dict, range_dict)
 
     def stage0(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         # skip the first stage 0
@@ -196,10 +196,9 @@ class TrainPassiveParty(TrainClientTemplate):
     def setup_round1(self, parameters, config, t: Tuple[List[np.ndarray], int, dict]):
         if ENABLE_PROFILER:
             self.prf.tic()
-        df = pd.read_csv(self.df_pth)
-        self.selector = get_sample_selector(df)
+        self.selector = get_sample_selector(self.cid)
         with torch.no_grad():
-            _input = self.selector.select([df['ID'].values[0]])
+            _input = self.selector.select([0])
             self.output_shape = self.lm(_input).shape[1:]
         t[0].append(np.array([pyobj2bytes((self.cid, self.selector.get_range()))]))
         if ENABLE_PROFILER:
@@ -215,12 +214,14 @@ class TrainPassiveParty(TrainClientTemplate):
     def stage1(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         logger.info(f"Client {self.cid}: reading encrypted batch and computing masked results...")
         if ENABLE_PROFILER:
-            self.prf.download(parameters, parameters, not_in_test=True)
+            if not self.singleton_flag:
+                self.prf.download(parameters, parameters, not_in_test=True)
             self.prf.download(server_rnd, server_rnd, not_in_test=True)
             prv_config = config
             self.prf.tic()
-        for param, given_param in zip(self.lm.parameters(), parameters):
-            param.data = torch.tensor(given_param)
+        if not self.singleton_flag:
+            for param, given_param in zip(self.lm.parameters(), parameters):
+                param.data = torch.tensor(given_param)
         # retrieve the real config of type List[bytes]
         config = bytes2pyobj(config[self.party_type])
         if ENABLE_PROFILER:

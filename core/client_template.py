@@ -110,7 +110,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             sk = bytes_to_private_key(self.secret_key)
             for cid, pk_bytes in config.items():
                 if cid == self.cid:
-                    continue
+                    raise RuntimeError("Can't happen")
                 pk = bytes_to_public_key(pk_bytes)
                 shared_key = generate_shared_key(sk, pk)
                 self.shared_secret_dict[cid] = shared_key

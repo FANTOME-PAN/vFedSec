@@ -1,63 +1,63 @@
+import torch
 import torch.nn.functional as F
 from torch import nn
 
 
 def generate_passive_party_local_module(party_type: str) -> nn.Module:
-    return {
-        'A': ExamplePassviePartyLocalModuleA(),
-        'B': ExamplePassviePartyLocalModuleB(),
-    }[party_type]
+    return CNN2Partial()
 
 
 def generate_active_party_local_module() -> nn.Module:
-    return ExampleActivePartyLocalModule()
+    return CNN2Partial()
 
 
 def generate_global_module() -> nn.Module:
-    return ExampleGlobalModule()
+    return FashionGlobalModule(num_classes=10)
 
 
 def get_criterion():
-    return nn.BCEWithLogitsLoss()
+    return nn.CrossEntropyLoss()
 
 
-class ExamplePassviePartyLocalModuleA(nn.Module):
+class CNN2Partial(nn.Module):
+
     def __init__(self):
-        super(ExamplePassviePartyLocalModuleA, self).__init__()
-        self.fc = nn.Linear(3, 64, bias=False)
+        super(CNN2Partial, self).__init__()
 
-    def forward(self, x):
-        return self.fc(x)
-
-
-class ExamplePassviePartyLocalModuleB(nn.Module):
-    def __init__(self):
-        super(ExamplePassviePartyLocalModuleB, self).__init__()
-        self.fc = nn.Linear(20, 64, bias=False)
-
-    def forward(self, x):
-        return self.fc(x)
-
-
-class ExampleActivePartyLocalModule(nn.Module):
-    def __init__(self):
-        super(ExampleActivePartyLocalModule, self).__init__()
-        self.fc = nn.Linear(57, 64, bias=True)
-
-    def forward(self, x):
-        return self.fc(x)
-
-
-class ExampleGlobalModule(nn.Module):
-    def __init__(self):
-        super(ExampleGlobalModule, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(64, 16),
-            nn.ReLU(inplace=True),
-            nn.Linear(16, 1)
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
         )
 
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
+
+        self.fc1 = nn.Linear(in_features=448, out_features=600)
+        # Global Module
+        # self.fc2 = nn.Linear(in_features=600, out_features=120)
+        # self.fc3 = nn.Linear(in_features=120, out_features=num_classes)
+
     def forward(self, x):
-        out = F.relu(x)
-        out = self.fc(out)
+        out = self.layer1(x)
+        out = self.layer2(out)
+        out = out.flatten(start_dim=1)
+        out = F.relu(self.fc1(out))
+        return out
+
+
+class FashionGlobalModule(nn.Module):
+    def __init__(self, num_classes=10):
+        super(FashionGlobalModule, self).__init__()
+        self.fc2 = nn.Linear(in_features=600, out_features=120)
+        self.fc3 = nn.Linear(in_features=120, out_features=num_classes)
+
+    def forward(self, x):
+        out = F.relu(self.fc2(x))
+        out = self.fc3(out)
         return out
