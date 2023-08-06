@@ -10,8 +10,8 @@ VALIDATION = False
 # CIDs of type B passive parties are '3', '4'.
 ACTIVE_PARTY_CID = '0'
 PASSIVE_PARTY_CIDs = {
-    'A': ['1'],
-    'B': ['2'],
+    'A': ['1', '2'],
+    'B': ['3', '4'],
 }
 NUM_CLIENTS = sum(len(v) for v in PASSIVE_PARTY_CIDs.values()) + 1
 

@@ -92,7 +92,7 @@ class TrainStrategy(fl.server.strategy.Strategy):
             ins_lst = [(
                 proxy,
                 FitIns(parameters=empty_parameters() if proxy.cid != '0' else self.cached_ranges
-                       , config={**self.fwd_dict, **config_dict})
+                       , config={**{k: v for k, v in self.fwd_dict.items() if k != proxy.cid}, **config_dict})
             ) for cid, proxy in cid_dict.items()]
             self.cached_ranges = []
             self.fwd_dict = {}

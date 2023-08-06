@@ -204,10 +204,7 @@ class TrainPassiveParty(TrainClientTemplate):
         t[0].append(np.array([pyobj2bytes((self.cid, self.selector.get_range()))]))
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
-            lst = []
-            self.prf.upload(t[0][-1], t[0][-1], tmp=lst)
-            if lst[0] > 0:
-                logger.warning(f'client {self.cid}: t[0][-1] overhead {lst[0]}')
+            self.prf.upload(t[0][-1], t[0][-1])
         if DEBUG:
             logger.info(f'client {self.cid}: upload bank list of size {len(t[0][0]) - 1}')
 
@@ -268,10 +265,7 @@ class TrainPassiveParty(TrainClientTemplate):
         masked_ret = rng_masking(expanded_output, self.cid, self.fwd_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc()
-            lst = []
-            self.prf.upload(masked_ret, expanded_output, tmp=lst)
-            if lst[0] > 0:
-                logger.warning(f'client {self.cid}: masked_ret overhead {lst[0]}')
+            self.prf.upload(masked_ret, expanded_output)
         if DEBUG:
             logger.info(f'client {self.cid}: masking offset = {server_rnd}')
         return [masked_ret], 0, {}

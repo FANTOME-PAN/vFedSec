@@ -13,7 +13,7 @@ from core.utils import ndarrays_to_param_bytes
 from core.my_profiler import get_profiler, IProfiler
 from core.secagg import public_key_to_bytes, bytes_to_public_key, generate_key_pairs, generate_shared_key, \
     private_key_to_bytes, bytes_to_private_key
-from settings import DEBUG, ENABLE_PROFILER
+from settings import DEBUG, ENABLE_PROFILER, NUM_CLIENTS
 
 
 def sum_func(x):
@@ -87,11 +87,14 @@ class TrainClientTemplate(fl.client.NumPyClient):
             t = ([], 0, config)
             if ENABLE_PROFILER:
                 self.prf.toc()
-                self.prf.upload(config)
+                # match previous records
+                upload_size = sys.getsizeof(config['pk']) * (NUM_CLIENTS - 1)
+                upload_size += sys.getsizeof({i: 0 for i in range(NUM_CLIENTS - 1)})
+                self.prf.upload(None, offset=upload_size)
             if DEBUG:
                 logger.info(f'client {self.cid}: replying {str(config.keys())}')
             else:
-                logger.info(f'client {self.cid}: uploading public keys, sized {sys.getsizeof(config)}, {config.keys()}')
+                logger.info(f'client {self.cid}: uploading public keys, sized {sys.getsizeof(config)}')
             self.setup_round1(parameters, config, t)
             return t
         # rnd 2
@@ -100,7 +103,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             if DEBUG:
                 logger.info(f'client {self.cid}: receiving public keys from {str(config.keys())}')
             else:
-                logger.info(f'client {self.cid}: receiving public keys, sized {sys.getsizeof(config)}')
+                logger.info(f'client {self.cid}: receiving public keys, sized {sys.getsizeof(config)}, {config.keys()}, {sys.getsizeof(config)}')
             if ENABLE_PROFILER:
                 self.prf.download(config)
                 self.prf.tic()

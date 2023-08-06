@@ -14,11 +14,11 @@ class IProfiler(ABC):
         ...
 
     @abstractmethod
-    def download(self, obj, original_obj=None, not_in_test=False):
+    def download(self, obj, original_obj=None, not_in_test=False, offset=0):
         ...
 
     @abstractmethod
-    def upload(self, obj, original_obj=None, not_in_test=False):
+    def upload(self, obj, original_obj=None, not_in_test=False, offset=0):
         ...
 
     @abstractmethod
@@ -39,7 +39,7 @@ def get_profiler() -> IProfiler:
 
 
 def my_getsizeof(obj: object) -> int:
-    s = sys.getsizeof(obj)
+    s = sys.getsizeof(obj) if obj is not None else 0
     if isinstance(obj, list) or isinstance(obj, tuple):
         for o in obj:
             s += my_getsizeof(o)
@@ -79,9 +79,9 @@ class MySimpleProfiler(IProfiler):
             self.td_cpu_time_overhead += t if is_overhead else 0
         return t
 
-    def download(self, obj, original_obj=None, not_in_test=False):
+    def download(self, obj, original_obj=None, not_in_test=False, offset=0):
         original_size = my_getsizeof(original_obj) if original_obj is not None else 0
-        s = my_getsizeof(obj)
+        s = my_getsizeof(obj) + offset
         overhead = s - original_size
         self.download_bytes += s
         self.download_overhead_bytes += overhead
@@ -90,9 +90,9 @@ class MySimpleProfiler(IProfiler):
             self.td_download_overhead_bytes += overhead
         return s
 
-    def upload(self, obj, original_obj=None, not_in_test=False, tmp=None):
+    def upload(self, obj, original_obj=None, not_in_test=False, offset=0):
         original_size = my_getsizeof(original_obj) if original_obj is not None else 0
-        s = my_getsizeof(obj)
+        s = my_getsizeof(obj) + offset
         if original_size > s:
             raise RuntimeError('what?')
         overhead = s - original_size
@@ -101,8 +101,6 @@ class MySimpleProfiler(IProfiler):
         if not_in_test:
             self.td_upload_bytes += s
             self.td_upload_overhead_bytes += overhead
-        if isinstance(tmp, list):
-            tmp.append(overhead)
         return s
 
     def get_cpu_time(self, include_overhead=True, test_phase=False):
