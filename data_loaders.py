@@ -104,14 +104,14 @@ class FashionDataLoader(IDataLoader):
         assert img.shape == (1, 28, 28)
         # Retrieve images & targets & indices
         batch_images = torch.stack([img[:, :7, :] for img, _ in batch])
-        batch_targets = torch.tensor([gt for _, gt in batch], dtype=int).view(-1, 1)
+        batch_targets = torch.tensor([gt for _, gt in batch], dtype=int)
         batch_indices = [(self.all_pp_ids, str(idx)) for idx in self.indices[:self.batch_size]]
         # Pop used indices
         self.indices = self.indices[self.batch_size:]
         # Update indices if end
         if len(self.indices) < self.batch_size:
             self.indices = np.random.permutation(len(self.train_set))
-        print(f'send {batch_indices}')
+        print(f'send targets {batch_targets}')
         return batch_images, batch_indices, batch_targets
 
 

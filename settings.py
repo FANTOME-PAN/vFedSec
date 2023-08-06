@@ -20,7 +20,7 @@ NUM_CLIENTS = sum(len(v) for v in PASSIVE_PARTY_CIDs.values()) + 1
 """Training hyper-parameters"""
 NUM_ITERATION = 5  # odd
 LEARNING_RATE = 0.01
-BATCH_SIZE = 4
+BATCH_SIZE = 256
 
 
 """Paths"""
