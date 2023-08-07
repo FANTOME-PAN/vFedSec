@@ -12,7 +12,8 @@ def generate_active_party_local_module() -> nn.Module:
 
 
 def generate_global_module() -> nn.Module:
-    return FashionGlobalModule(num_classes=10)
+    # 47 for EMNIST
+    return FashionGlobalModule(num_classes=47)
 
 
 def get_criterion():
