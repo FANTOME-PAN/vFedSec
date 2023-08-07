@@ -84,8 +84,9 @@ class FashionDataLoader(IDataLoader):
         # self.max_ids = None
         self.type2max_ids: Dict[str, list] = {t: [] for t in INDEX_TO_TYPE}
         self.batch_size = batch_size
-        self.train_set = torchvision.datasets.FashionMNIST(
+        self.train_set = torchvision.datasets.EMNIST(
             "./data",
+            split='balanced',
             download=True,
             transform=transforms.Compose([transforms.ToTensor()])
         )
@@ -117,8 +118,9 @@ class FashionDataLoader(IDataLoader):
 
 class FashionSampleSelector(ISampleSelector):
     def __init__(self, cid: str):
-        self.train_set = torchvision.datasets.FashionMNIST(
+        self.train_set = torchvision.datasets.EMNIST(
             "./data",
+            split='balanced',
             download=True,
             transform=transforms.Compose([transforms.ToTensor()])
         )
