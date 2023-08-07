@@ -214,11 +214,14 @@ class TrainPassiveParty(TrainClientTemplate):
     def stage1(self, server_rnd, parameters: List[np.ndarray], config: dict) -> Tuple[List[np.ndarray], int, dict]:
         logger.info(f"Client {self.cid}: reading encrypted batch and computing masked results...")
         if ENABLE_PROFILER:
+            # If the client is the only one of its cluster,
+            # no need to download parameters as they are updated locally
             if not self.singleton_flag:
                 self.prf.download(parameters, parameters, not_in_test=True)
             self.prf.download(server_rnd, server_rnd, not_in_test=True)
             prv_config = config
             self.prf.tic()
+        # For the same reason, the singleton client won't set parameters.
         if not self.singleton_flag:
             for param, given_param in zip(self.lm.parameters(), parameters):
                 param.data = torch.tensor(given_param)
@@ -246,7 +249,7 @@ class TrainPassiveParty(TrainClientTemplate):
         ids = sorted(ids, key=lambda x: x[0])
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
-            self.prf.download(prv_config, ids)
+            self.prf.download(prv_config, [sid for _, sid in ids])
             self.prf.tic()
         partial_batch_data = self.selector.select([o[1] for o in ids])
         self.no_sample_selected = True if len(ids) == 0 else False
