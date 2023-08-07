@@ -82,6 +82,8 @@ class MySimpleProfiler(IProfiler):
     def download(self, obj, original_obj=None, not_in_test=False, offset=0):
         original_size = my_getsizeof(original_obj) if original_obj is not None else 0
         s = my_getsizeof(obj) + offset
+        if original_size > s:
+            raise RuntimeError('what?')
         overhead = s - original_size
         self.download_bytes += s
         self.download_overhead_bytes += overhead
