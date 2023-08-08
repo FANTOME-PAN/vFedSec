@@ -118,7 +118,7 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.tic()
         data, ids, labels = self.loader.next_batch()
-        self.data = data
+        self.cached_batch_data = data
         self.intermediate_output: torch.Tensor = self.ap_lm(data)
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
@@ -164,6 +164,10 @@ class TrainActiveParty(TrainClientTemplate):
             self.type2pp_grads[party_type] = np.zeros(self.pp_lm_sizes[party_type], dtype=int)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
+        # Fwd pass. Rebuild comp graph
+        self.ap_lm.zero_grad()
+        self.intermediate_output = self.ap_lm(self.cached_batch_data)
+        if ENABLE_PROFILER:
             self.prf.tic()
         # update Active Party's local module
         self.intermediate_output.backward(self.recv_grad)
@@ -258,13 +262,14 @@ class TrainPassiveParty(TrainClientTemplate):
         expanded_output = torch.zeros(len(config), *self.output_shape)
         if not self.no_sample_selected:
             self.intermediate_output = self.lm(partial_batch_data)
-            expanded_output[self.mask] = self.intermediate_output
+            self.cached_batch_data = partial_batch_data
+            expanded_output[self.mask] = self.intermediate_output.clone().detach()
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.tic()
         if VALIDATION:
             expanded_output = torch.zeros_like(expanded_output)
-        expanded_output = quantize([expanded_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
+        expanded_output = quantize([expanded_output.numpy()], CLIP_RANGE, TARGET_RANGE)[0]
         # masked_ret = masking(server_rnd, expanded_output, self.cid, self.shared_seed_dict)
         masked_ret = rng_masking(expanded_output, self.cid, self.fwd_rng_dict)
         if ENABLE_PROFILER:
@@ -282,6 +287,14 @@ class TrainPassiveParty(TrainClientTemplate):
         client_grad = torch.tensor(parameters[0])
         # bank client code
         if not self.no_sample_selected:
+            # exclude forward pass here (cuz it has been counted in stage 1)
+            if ENABLE_PROFILER:
+                self.prf.toc(is_overhead=False, not_in_test=True)
+            self.lm.zero_grad()
+            self.intermediate_output = self.lm(self.cached_batch_data)
+            if ENABLE_PROFILER:
+                self.prf.tic()
+            self.intermediate_output.retain_grad()
             self.intermediate_output.backward(client_grad[self.mask])
             # If the passive party only has this client, skip uploading grad and apply updates locally.
             if self.singleton_flag:
@@ -293,6 +306,7 @@ class TrainPassiveParty(TrainClientTemplate):
                     self.partial_grad += [param.grad.cpu().detach().numpy().flatten()]
                 self.partial_grad = np.concatenate(self.partial_grad)
                 self.lm.zero_grad()
+
         else:
             self.partial_grad = np.zeros(self.lm_size)
         if VALIDATION:
