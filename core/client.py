@@ -32,8 +32,7 @@ def masking(seed_offset, x: np.ndarray, cid, shared_seed_dict: Dict, target_rang
 def try_decrypt_and_load(key, ciphertext: bytes) -> Union[object, None]:
     try:
         plaintext = decrypt(key, ciphertext)
-        ret = bytes2pyobj(plaintext)
-        return ret
+        return plaintext
     except:
         return None
 
@@ -128,7 +127,7 @@ class TrainActiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.tic()
         data, ids, labels = self.loader.next_batch()
-        self.data = data
+        self.cached_batch_data = data
         self.intermediate_output: torch.Tensor = self.ap_lm(data)
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
@@ -176,6 +175,10 @@ class TrainActiveParty(TrainClientTemplate):
                                                      self.cid, self.shared_seed_dict)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
+        # Rebuild comp graph
+        self.ap_lm.zero_grad()
+        self.intermediate_output = self.ap_lm(self.cached_batch_data)
+        if ENABLE_PROFILER:
             self.prf.tic()
         # self.partial_grad = masking(server_rnd, np.zeros(self.pp_lm_size, dtype=int), self.cid, self.shared_seed_dict)
         # update Active Party's local module
@@ -261,11 +264,12 @@ class TrainPassiveParty(TrainClientTemplate):
         expanded_output = torch.zeros(len(config), *self.output_shape)
         if not self.no_sample_selected:
             self.intermediate_output = self.lm(partial_batch_data)
-            expanded_output[self.mask] = self.intermediate_output
+            self.cached_batch_data = partial_batch_data
+            expanded_output[self.mask] = self.intermediate_output.clone().detach()
         if ENABLE_PROFILER:
             self.prf.toc(is_overhead=False)
             self.prf.tic()
-        expanded_output = quantize([expanded_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
+        expanded_output = quantize([expanded_output.numpy()], CLIP_RANGE, TARGET_RANGE)[0]
         masked_ret = masking(server_rnd, expanded_output, self.cid, self.shared_seed_dict)
         if ENABLE_PROFILER:
             self.prf.toc()
@@ -278,10 +282,16 @@ class TrainPassiveParty(TrainClientTemplate):
         if ENABLE_PROFILER:
             self.prf.download(server_rnd, server_rnd, not_in_test=True)
             self.prf.download(parameters[0], parameters[0], not_in_test=True)
+        # Rebuild comp graph
+        if not self.no_sample_selected:
+            self.lm.zero_grad()
+            self.intermediate_output = self.lm(self.cached_batch_data)
+        if ENABLE_PROFILER:
             self.prf.tic()
         client_grad = torch.tensor(parameters[0])
         # bank client code
         if not self.no_sample_selected:
+            self.intermediate_output.retain_grad()
             self.intermediate_output.backward(client_grad[self.mask])
             self.partial_grad = []
             for param in self.lm.parameters():
