@@ -327,7 +327,7 @@ class TrainPassiveParty(TrainClientTemplate):
             logger.info(f'client {self.cid}: uploading masked gradient')
         if ENABLE_PROFILER and server_rnd == 2 * TRAINING_ROUNDS - 1:
             self.total_prf.toc()
-            txt = f'TRAIN:\ntotal_cpu_time = {self.total_prf.get_cpu_time()}, ' \
+            txt = f'TRAIN:\ntotal_cpu_time = {self.prf.get_cpu_time()}, ' \
                   f'overhead = {self.prf.get_cpu_time() - self.prf.get_cpu_time(include_overhead=False)}\n' \
                   f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
                   f'overhead = {self.prf.get_num_download_bytes() - self.prf.get_num_download_bytes(include_overhead=False)}\n' \

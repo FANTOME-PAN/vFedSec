@@ -112,7 +112,6 @@ class FashionDataLoader(IDataLoader):
         # Update indices if end
         if len(self.indices) < self.batch_size:
             self.indices = np.random.permutation(len(self.train_set))
-        print(f'send targets {batch_targets}')
         return batch_images, batch_indices, batch_targets
 
 
