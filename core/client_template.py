@@ -3,6 +3,7 @@ import pickle
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
+import torch
 
 import flwr as fl
 import numpy as np
@@ -48,6 +49,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             self.recv_grad = np.array(0)
             self.intermediate_output = np.array(0)
             self.log_path = None
+            self.cached_batch_data = None
 
     def check_stage(self, stage):
         # init
@@ -148,14 +150,12 @@ class TrainClientTemplate(fl.client.NumPyClient):
     def cache(self):
         if not self.client_dir.exists():
             os.makedirs(self.client_dir)
-        with open(self.cache_pth, 'wb') as f:
-            pickle.dump(self.get_vars(), f)
+        torch.save(self.get_vars(), self.cache_pth)
 
     def reload(self):
         if self.cache_pth.exists():
             logger.info(f'client {self.cid}: reloading from {str(self.cache_pth)}')
-            with open(self.cache_pth, 'rb') as f:
-                self.__dict__.update(pickle.load(f))
+            self.__dict__.update(torch.load(self.cache_pth))
             return True
         return False
 
@@ -182,7 +182,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
                 logger.info('Client 0: stop signal is detected. abort federated training')
 
                 self.total_prf.toc()
-                txt = f'TRAIN:\ntotal_cpu_time = {self.total_prf.get_cpu_time()}, ' \
+                txt = f'TRAIN:\ntotal_cpu_time = {self.prf.get_cpu_time()}, ' \
                       f'overhead = {self.prf.get_cpu_time() - self.prf.get_cpu_time(include_overhead=False)}\n' \
                       f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
                       f'overhead = {self.prf.get_num_download_bytes() - self.prf.get_num_download_bytes(include_overhead=False)}\n' \
