@@ -164,10 +164,12 @@ class TrainActiveParty(TrainClientTemplate):
             self.type2pp_grads[party_type] = np.zeros(self.pp_lm_sizes[party_type], dtype=int)
         if ENABLE_PROFILER:
             self.prf.toc(not_in_test=True)
+            self.total_prf.toc()
         # Fwd pass. Rebuild comp graph
         self.ap_lm.zero_grad()
         self.intermediate_output = self.ap_lm(self.cached_batch_data)
         if ENABLE_PROFILER:
+            self.total_prf.tic()
             self.prf.tic()
         # update Active Party's local module
         self.intermediate_output.backward(self.recv_grad)
@@ -290,9 +292,11 @@ class TrainPassiveParty(TrainClientTemplate):
             # exclude forward pass here (cuz it has been counted in stage 1)
             if ENABLE_PROFILER:
                 self.prf.toc(is_overhead=False, not_in_test=True)
+                self.total_prf.toc()
             self.lm.zero_grad()
             self.intermediate_output = self.lm(self.cached_batch_data)
             if ENABLE_PROFILER:
+                self.total_prf.tic()
                 self.prf.tic()
             self.intermediate_output.retain_grad()
             self.intermediate_output.backward(client_grad[self.mask])
@@ -327,7 +331,7 @@ class TrainPassiveParty(TrainClientTemplate):
             logger.info(f'client {self.cid}: uploading masked gradient')
         if ENABLE_PROFILER and server_rnd == 2 * TRAINING_ROUNDS - 1:
             self.total_prf.toc()
-            txt = f'TRAIN:\ntotal_cpu_time = {self.prf.get_cpu_time()}, ' \
+            txt = f'TRAIN:\ntotal_cpu_time = {self.total_prf.get_cpu_time()}, ' \
                   f'overhead = {self.prf.get_cpu_time() - self.prf.get_cpu_time(include_overhead=False)}\n' \
                   f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
                   f'overhead = {self.prf.get_num_download_bytes() - self.prf.get_num_download_bytes(include_overhead=False)}\n' \

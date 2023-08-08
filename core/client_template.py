@@ -182,7 +182,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
                 logger.info('Client 0: stop signal is detected. abort federated training')
 
                 self.total_prf.toc()
-                txt = f'TRAIN:\ntotal_cpu_time = {self.prf.get_cpu_time()}, ' \
+                txt = f'TRAIN:\ntotal_cpu_time = {self.total_prf.get_cpu_time()}, ' \
                       f'overhead = {self.prf.get_cpu_time() - self.prf.get_cpu_time(include_overhead=False)}\n' \
                       f'total_download_bytes = {self.prf.get_num_download_bytes()}, ' \
                       f'overhead = {self.prf.get_num_download_bytes() - self.prf.get_num_download_bytes(include_overhead=False)}\n' \
