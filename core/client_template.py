@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+import torch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -47,6 +48,7 @@ class TrainClientTemplate(fl.client.NumPyClient):
             self.recv_grad = np.array(0)
             self.intermediate_output = np.array(0)
             self.log_path = None
+            self.cached_batch_data = None
 
     def check_stage(self, stage):
         # init
@@ -150,17 +152,13 @@ class TrainClientTemplate(fl.client.NumPyClient):
         #     torch.save(v, self.cache_pth)
         if not self.client_dir.exists():
             os.makedirs(self.client_dir)
-        with open(self.cache_pth, 'wb') as f:
-            pickle.dump(self.get_vars(), f)
-        # torch.save(vars(self), self.cache_pth)
+        torch.save(self.get_vars(), self.cache_pth)
 
     def reload(self):
         if self.cache_pth.exists():
             logger.info(f'client {self.cid}: reloading from {str(self.cache_pth)}')
-            with open(self.cache_pth, 'rb') as f:
-                self.__dict__.update(pickle.load(f))
+            self.__dict__.update(torch.load(self.cache_pth))
             return True
-            # self.__dict__.update(torch.load(self.cache_pth))
         return False
 
     def __execute(self, parameters: List[np.ndarray], config: Dict[str, Scalar]) \
