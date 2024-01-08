@@ -123,7 +123,14 @@ class TrainActiveParty(TrainClientTemplate):
         if VALIDATION:
             wx = np.zeros_like(wx)
         wx = quantize([wx], CLIP_RANGE, TARGET_RANGE)[0]
-        masked_wx = rng_masking(wx, self.cid, self.fwd_rng_dict)
+        masked_wx = wx
+        # Generate masks for each type
+        for ptype, idx in TYPE_TO_INDEX.items():
+            cids = PASSIVE_PARTY_CIDs[ptype]
+            sub_rng_dict = {k: v for k, v in self.fwd_rng_dict.items() if k in cids}
+            msk = rng_masking(np.zeros((wx.shape[0], EMBEDDING_DIM), int), self.cid, sub_rng_dict)
+            start, end = idx * EMBEDDING_DIM, (idx + 1) * EMBEDDING_DIM
+            masked_wx[:, start: end] += msk
         ret_dict = {t: [] for t in INDEX_TO_TYPE}
         for cids, sample_id in ids:
             for cid in cids:
@@ -256,7 +263,9 @@ class TrainPassiveParty(TrainClientTemplate):
             expanded_output = torch.zeros_like(expanded_output)
         expanded_output = quantize([expanded_output.detach().numpy()], CLIP_RANGE, TARGET_RANGE)[0]
         # masked_ret = masking(server_rnd, expanded_output, self.cid, self.shared_seed_dict)
-        masked_ret = rng_masking(expanded_output, self.cid, self.fwd_rng_dict)
+        cids = PASSIVE_PARTY_CIDs[self.party_type] + ['0']
+        sub_rng_dict = {k: v for k, v in self.fwd_rng_dict.items() if k in cids}
+        masked_ret = rng_masking(expanded_output, self.cid, sub_rng_dict)
         if ENABLE_PROFILER:
             self.prf.toc()
             self.prf.upload(masked_ret, expanded_output)

@@ -24,7 +24,7 @@ def get_criterion():
 class ExamplePassviePartyLocalModuleA(nn.Module):
     def __init__(self):
         super(ExamplePassviePartyLocalModuleA, self).__init__()
-        self.fc = nn.Linear(3, 64, bias=False)
+        self.fc = nn.Linear(3, 32, bias=False)
 
     def forward(self, x):
         return self.fc(x)
@@ -33,7 +33,7 @@ class ExamplePassviePartyLocalModuleA(nn.Module):
 class ExamplePassviePartyLocalModuleB(nn.Module):
     def __init__(self):
         super(ExamplePassviePartyLocalModuleB, self).__init__()
-        self.fc = nn.Linear(20, 64, bias=False)
+        self.fc = nn.Linear(20, 32, bias=False)
 
     def forward(self, x):
         return self.fc(x)
